@@ -1,5 +1,5 @@
 HELP.md
-realtime_feature_platform_security_telemetry_proje_plani_tr.md
+.internal/
 target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/

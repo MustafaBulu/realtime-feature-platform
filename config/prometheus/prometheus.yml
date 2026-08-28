@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: feature-api
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["feature-api:8080"]
+
+  - job_name: stream-worker
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["stream-worker:8081"]
+
+  - job_name: workload-generator
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["workload-generator:8082"]
