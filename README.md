@@ -96,6 +96,35 @@ GET http://localhost:8081/actuator/prometheus
 GET http://localhost:8082/actuator/prometheus
 ```
 
+## Happy Path
+
+Produce a small request-count workload:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://localhost:8082/workloads/request-count-total `
+  -ContentType application/json `
+  -Body '{"entityType":"service","entityId":"catalog-api","values":[100,300,50]}'
+```
+
+Read the materialized feature:
+
+```text
+GET http://localhost:8080/features/service/catalog-api/request_count_total
+```
+
+Expected response value:
+
+```json
+{
+  "entityType": "service",
+  "entityId": "catalog-api",
+  "featureName": "request_count_total",
+  "value": 450
+}
+```
+
 ## Roadmap
 
 The platform will grow toward:
