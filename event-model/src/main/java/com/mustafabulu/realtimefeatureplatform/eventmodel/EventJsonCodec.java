@@ -39,7 +39,7 @@ public final class EventJsonCodec {
             Map<String, Object> body = MAPPER.readValue(json, MAP_TYPE);
             Map<String, Object> entity = mapValue(body, "entity");
             Map<String, Object> payload = new LinkedHashMap<>(mapValue(body, "payload"));
-            normalizeRequestCount(body, payload);
+            normalizeRequestCompletedPayload(body, payload);
 
             return new PlatformEvent(
                     stringValue(body, "eventId"),
@@ -53,14 +53,20 @@ public final class EventJsonCodec {
         }
     }
 
-    private static void normalizeRequestCount(Map<String, Object> body, Map<String, Object> payload) {
+    private static void normalizeRequestCompletedPayload(Map<String, Object> body, Map<String, Object> payload) {
         if (!"request.completed".equals(body.get("eventType"))) {
             return;
         }
 
-        Object count = payload.get("count");
-        if (count instanceof Number number) {
-            payload.put("count", number.longValue());
+        normalizeLong(payload, "count");
+        normalizeLong(payload, "statusCode");
+        normalizeLong(payload, "latencyMs");
+    }
+
+    private static void normalizeLong(Map<String, Object> payload, String fieldName) {
+        Object value = payload.get(fieldName);
+        if (value instanceof Number number) {
+            payload.put(fieldName, number.longValue());
         }
     }
 

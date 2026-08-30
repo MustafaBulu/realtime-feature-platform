@@ -64,6 +64,20 @@ class PlatformEventTest {
     }
 
     @Test
+    void rejectsRequestCompletedWithoutCount() {
+        EventValidator validator = new EventValidator();
+        PlatformEvent event = new PlatformEvent(
+                "event-1",
+                "request.completed",
+                Instant.parse("2026-08-28T12:10:14.200Z"),
+                new EntityRef("service", "catalog-api"),
+                Map.of()
+        );
+
+        assertThrows(EventValidationException.class, () -> validator.validate(event));
+    }
+
+    @Test
     void rejectsNegativeRequestCount() {
         EventValidator validator = new EventValidator();
         PlatformEvent event = RequestCompletedEventFactory.create(
@@ -71,6 +85,53 @@ class PlatformEventTest {
                 "service",
                 "catalog-api",
                 -1,
+                Instant.parse("2026-08-28T12:10:14.200Z")
+        );
+
+        assertThrows(EventValidationException.class, () -> validator.validate(event));
+    }
+
+    @Test
+    void validatesRequestCompletedObservabilityFields() {
+        EventValidator validator = new EventValidator();
+
+        validator.validate(RequestCompletedEventFactory.create(
+                "event-1",
+                "service",
+                "catalog-api",
+                100,
+                500,
+                300L,
+                Instant.parse("2026-08-28T12:10:14.200Z")
+        ));
+    }
+
+    @Test
+    void rejectsInvalidStatusCode() {
+        EventValidator validator = new EventValidator();
+        PlatformEvent event = RequestCompletedEventFactory.create(
+                "event-1",
+                "service",
+                "catalog-api",
+                100,
+                99,
+                300L,
+                Instant.parse("2026-08-28T12:10:14.200Z")
+        );
+
+        assertThrows(EventValidationException.class, () -> validator.validate(event));
+    }
+
+    @Test
+    void rejectsNegativeLatency() {
+        EventValidator validator = new EventValidator();
+        PlatformEvent event = RequestCompletedEventFactory.create(
+                "event-1",
+                "service",
+                "catalog-api",
+                100,
+                200,
+                -1L,
                 Instant.parse("2026-08-28T12:10:14.200Z")
         );
 

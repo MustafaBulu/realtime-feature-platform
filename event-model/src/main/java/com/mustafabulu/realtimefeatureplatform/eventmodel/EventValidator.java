@@ -27,13 +27,37 @@ public class EventValidator {
             throw new EventValidationException("eventTime must not be too far in the future");
         }
         if ("request.completed".equals(event.eventType())) {
-            Object count = event.payload().get("count");
-            if (!(count instanceof Number number)) {
-                throw new EventValidationException("request.completed payload must contain numeric count");
-            }
-            if (number.longValue() < 0) {
+            long count = requiredLong(event, "count");
+            if (count < 0) {
                 throw new EventValidationException("request.completed count must not be negative");
             }
+            optionalLong(event, "statusCode").ifPresent(statusCode -> {
+                if (statusCode < 100 || statusCode > 599) {
+                    throw new EventValidationException("request.completed statusCode must be between 100 and 599");
+                }
+            });
+            optionalLong(event, "latencyMs").ifPresent(latencyMs -> {
+                if (latencyMs < 0) {
+                    throw new EventValidationException("request.completed latencyMs must not be negative");
+                }
+            });
         }
+    }
+
+    private static long requiredLong(PlatformEvent event, String fieldName) {
+        return optionalLong(event, fieldName)
+                .orElseThrow(() -> new EventValidationException(
+                        "request.completed payload must contain numeric " + fieldName));
+    }
+
+    private static java.util.Optional<Long> optionalLong(PlatformEvent event, String fieldName) {
+        Object value = event.payload().get(fieldName);
+        if (value == null) {
+            return java.util.Optional.empty();
+        }
+        if (!(value instanceof Number number)) {
+            throw new EventValidationException("request.completed " + fieldName + " must be numeric");
+        }
+        return java.util.Optional.of(number.longValue());
     }
 }

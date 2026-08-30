@@ -57,7 +57,12 @@ class RequestCountTotalE2ETest {
             await()
                     .atMost(Duration.ofSeconds(30))
                     .pollInterval(Duration.ofMillis(250))
-                    .untilAsserted(() -> assertEquals(450L, readFeatureValue(apiPort)));
+                    .untilAsserted(() -> {
+                        assertEquals(450.0, readFeatureValue(apiPort, "request_count_total"));
+                        assertEquals(3.0, readFeatureValue(apiPort, "entity_event_count_10m"));
+                        assertEquals(50.0 / 450.0, readFeatureValue(apiPort, "entity_error_rate_10m"));
+                        assertEquals(59_000.0 / 450.0, readFeatureValue(apiPort, "entity_avg_latency_ms_5m"));
+                    });
         }
     }
 
@@ -105,7 +110,15 @@ class RequestCountTotalE2ETest {
                 .uri(URI.create("http://localhost:" + port + "/workloads/request-count-total"))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString("""
-                        {"entityType":"service","entityId":"catalog-api","values":[100,300,50]}
+                        {
+                          "entityType": "service",
+                          "entityId": "catalog-api",
+                          "samples": [
+                            {"count": 100, "statusCode": 200, "latencyMs": 80},
+                            {"count": 300, "statusCode": 200, "latencyMs": 120},
+                            {"count": 50, "statusCode": 500, "latencyMs": 300}
+                          ]
+                        }
                         """))
                 .build();
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -113,9 +126,9 @@ class RequestCountTotalE2ETest {
         assertEquals(202, response.statusCode());
     }
 
-    private long readFeatureValue(int port) throws IOException, InterruptedException {
+    private double readFeatureValue(int port, String featureName) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + "/features/service/catalog-api/request_count_total"))
+                .uri(URI.create("http://localhost:" + port + "/features/service/catalog-api/" + featureName))
                 .GET()
                 .build();
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -124,6 +137,6 @@ class RequestCountTotalE2ETest {
             return -1;
         }
 
-        return objectMapper.readTree(response.body()).path("value").asLong(-1);
+        return objectMapper.readTree(response.body()).path("value").asDouble(-1);
     }
 }

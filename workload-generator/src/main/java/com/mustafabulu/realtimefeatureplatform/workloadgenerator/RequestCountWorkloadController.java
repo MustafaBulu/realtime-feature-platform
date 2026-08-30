@@ -27,25 +27,88 @@ class RequestCountWorkloadController {
                 effectiveRequest.entityType(),
                 effectiveRequest.entityId(),
                 events.size(),
-                events.stream().mapToLong(event -> ((Number) event.payload().get("count")).longValue()).sum()
+                events.stream().mapToLong(event -> ((Number) event.payload().get("count")).longValue()).sum(),
+                effectiveRequest.expectedErrorRate(),
+                effectiveRequest.expectedAverageLatencyMs()
         );
     }
 
-    record WorkloadRequest(String entityType, String entityId, List<Long> values) {
+    record WorkloadRequest(String entityType, String entityId, List<Long> values, List<RequestSample> samples) {
 
         static WorkloadRequest defaultRequest() {
-            return new WorkloadRequest("service", "catalog-api", List.of(100L, 300L, 50L));
+            return new WorkloadRequest(
+                    "service",
+                    "catalog-api",
+                    null,
+                    List.of(
+                            new RequestSample(100L, 200, 80L),
+                            new RequestSample(300L, 200, 120L),
+                            new RequestSample(50L, 500, 300L)
+                    )
+            );
         }
 
         WorkloadRequest withDefaults() {
             String resolvedEntityType = entityType == null || entityType.isBlank() ? "service" : entityType;
             String resolvedEntityId = entityId == null || entityId.isBlank() ? "catalog-api" : entityId;
-            List<Long> resolvedValues = values == null || values.isEmpty() ? List.of(100L, 300L, 50L) : List.copyOf(values);
+            List<RequestSample> resolvedSamples = resolveSamples();
 
-            return new WorkloadRequest(resolvedEntityType, resolvedEntityId, resolvedValues);
+            return new WorkloadRequest(resolvedEntityType, resolvedEntityId, null, resolvedSamples);
+        }
+
+        private List<RequestSample> resolveSamples() {
+            if (samples != null && !samples.isEmpty()) {
+                return samples.stream()
+                        .map(RequestSample::withDefaults)
+                        .toList();
+            }
+
+            List<Long> resolvedValues = values == null || values.isEmpty() ? List.of(100L, 300L, 50L) : List.copyOf(values);
+            return resolvedValues.stream()
+                    .map(value -> new RequestSample(value, 200, 100L))
+                    .toList();
+        }
+
+        double expectedErrorRate() {
+            long requestCount = samples.stream().mapToLong(RequestSample::count).sum();
+            long errorCount = samples.stream()
+                    .filter(RequestSample::serverError)
+                    .mapToLong(RequestSample::count)
+                    .sum();
+            return requestCount == 0 ? 0.0 : (double) errorCount / requestCount;
+        }
+
+        double expectedAverageLatencyMs() {
+            long requestCount = samples.stream().mapToLong(RequestSample::count).sum();
+            long weightedLatencySum = samples.stream()
+                    .mapToLong(sample -> sample.count() * sample.latencyMs())
+                    .sum();
+            return requestCount == 0 ? 0.0 : (double) weightedLatencySum / requestCount;
         }
     }
 
-    record WorkloadResponse(String entityType, String entityId, int eventsProduced, long expectedTotal) {
+    record RequestSample(Long count, Integer statusCode, Long latencyMs) {
+
+        RequestSample withDefaults() {
+            long resolvedCount = count == null ? 1L : count;
+            int resolvedStatusCode = statusCode == null ? 200 : statusCode;
+            long resolvedLatencyMs = latencyMs == null ? 100L : latencyMs;
+
+            return new RequestSample(resolvedCount, resolvedStatusCode, resolvedLatencyMs);
+        }
+
+        boolean serverError() {
+            return statusCode >= 500;
+        }
+    }
+
+    record WorkloadResponse(
+            String entityType,
+            String entityId,
+            int eventsProduced,
+            long expectedTotal,
+            double expectedErrorRate,
+            double expectedAverageLatencyMs
+    ) {
     }
 }

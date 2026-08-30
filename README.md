@@ -17,6 +17,10 @@ The project is intentionally scoped as a streaming infrastructure portfolio proj
 - Health endpoints
 - Structured console logging
 - GitHub Actions CI
+- Event contract validation
+- Worker counters for processed, invalid, and ignored events
+- Tumbling 10-minute entity event-count feature
+- Entity error-rate and average-latency features
 
 ## Modules
 
@@ -105,7 +109,7 @@ Invoke-RestMethod `
   -Method Post `
   -Uri http://localhost:8082/workloads/request-count-total `
   -ContentType application/json `
-  -Body '{"entityType":"service","entityId":"catalog-api","values":[100,300,50]}'
+  -Body '{"entityType":"service","entityId":"catalog-api","samples":[{"count":100,"statusCode":200,"latencyMs":80},{"count":300,"statusCode":200,"latencyMs":120},{"count":50,"statusCode":500,"latencyMs":300}]}'
 ```
 
 Read the materialized feature:
@@ -122,6 +126,63 @@ Expected response value:
   "entityId": "catalog-api",
   "featureName": "request_count_total",
   "value": 450
+}
+```
+
+Read the latest 10-minute entity event-count feature:
+
+```text
+GET http://localhost:8080/features/service/catalog-api/entity_event_count_10m
+```
+
+Expected response value:
+
+```json
+{
+  "entityType": "service",
+  "entityId": "catalog-api",
+  "featureName": "entity_event_count_10m",
+  "value": 3
+}
+```
+
+Window-specific reads are also supported with a `windowStart` query parameter:
+
+```text
+GET http://localhost:8080/features/service/catalog-api/entity_event_count_10m?windowStart=2026-08-28T12:10:00Z
+```
+
+Read the latest 10-minute entity error-rate feature:
+
+```text
+GET http://localhost:8080/features/service/catalog-api/entity_error_rate_10m
+```
+
+Expected response value:
+
+```json
+{
+  "entityType": "service",
+  "entityId": "catalog-api",
+  "featureName": "entity_error_rate_10m",
+  "value": 0.1111111111111111
+}
+```
+
+Read the latest 5-minute average-latency feature:
+
+```text
+GET http://localhost:8080/features/service/catalog-api/entity_avg_latency_ms_5m
+```
+
+Expected response value:
+
+```json
+{
+  "entityType": "service",
+  "entityId": "catalog-api",
+  "featureName": "entity_avg_latency_ms_5m",
+  "value": 131.11111111111111
 }
 ```
 

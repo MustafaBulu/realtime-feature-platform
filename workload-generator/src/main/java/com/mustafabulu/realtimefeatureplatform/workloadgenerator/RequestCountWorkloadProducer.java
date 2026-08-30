@@ -26,8 +26,14 @@ class RequestCountWorkloadProducer {
     }
 
     List<PlatformEvent> produce(RequestCountWorkloadController.WorkloadRequest request) {
-        List<PlatformEvent> events = request.values().stream()
-                .map(value -> RequestCompletedEventFactory.create(request.entityType(), request.entityId(), value))
+        List<PlatformEvent> events = request.samples().stream()
+                .map(sample -> RequestCompletedEventFactory.create(
+                        request.entityType(),
+                        request.entityId(),
+                        sample.count(),
+                        sample.statusCode(),
+                        sample.latencyMs()
+                ))
                 .peek(eventValidator::validate)
                 .peek(event -> kafkaTemplate.send(eventsTopic, event.entity().id(), EventJsonCodec.toJson(event)))
                 .toList();
