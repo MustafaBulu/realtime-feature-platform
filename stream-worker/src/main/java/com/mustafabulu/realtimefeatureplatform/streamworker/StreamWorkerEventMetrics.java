@@ -10,6 +10,8 @@ class StreamWorkerEventMetrics {
     private final Counter processedEvents;
     private final Counter invalidEvents;
     private final Counter ignoredEvents;
+    private final Counter duplicateEvents;
+    private final Counter lateEvents;
 
     StreamWorkerEventMetrics(MeterRegistry meterRegistry) {
         this.processedEvents = Counter.builder("rfp.worker.events.processed")
@@ -20,6 +22,12 @@ class StreamWorkerEventMetrics {
                 .register(meterRegistry);
         this.ignoredEvents = Counter.builder("rfp.worker.events.ignored")
                 .description("Valid events ignored because no feature processor handles their type")
+                .register(meterRegistry);
+        this.duplicateEvents = Counter.builder("rfp.worker.events.duplicate")
+                .description("Events discarded because their eventId was already processed")
+                .register(meterRegistry);
+        this.lateEvents = Counter.builder("rfp.worker.events.late")
+                .description("Events discarded because their eventTime is outside the allowed lateness")
                 .register(meterRegistry);
     }
 
@@ -33,5 +41,13 @@ class StreamWorkerEventMetrics {
 
     void recordIgnored() {
         ignoredEvents.increment();
+    }
+
+    void recordDuplicate() {
+        duplicateEvents.increment();
+    }
+
+    void recordLate() {
+        lateEvents.increment();
     }
 }

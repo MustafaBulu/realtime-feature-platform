@@ -17,10 +17,19 @@ class RequestCountTotalConsumer {
 
     private final EventValidator eventValidator = new EventValidator();
     private final List<PlatformEventProcessor> processors;
+    private final ProcessedEventStore processedEventStore;
+    private final EventTimePolicy eventTimePolicy;
     private final StreamWorkerEventMetrics metrics;
 
-    RequestCountTotalConsumer(List<PlatformEventProcessor> processors, StreamWorkerEventMetrics metrics) {
+    RequestCountTotalConsumer(
+            List<PlatformEventProcessor> processors,
+            ProcessedEventStore processedEventStore,
+            EventTimePolicy eventTimePolicy,
+            StreamWorkerEventMetrics metrics
+    ) {
         this.processors = List.copyOf(processors);
+        this.processedEventStore = processedEventStore;
+        this.eventTimePolicy = eventTimePolicy;
         this.metrics = metrics;
     }
 
@@ -29,6 +38,17 @@ class RequestCountTotalConsumer {
         try {
             PlatformEvent event = EventJsonCodec.fromJson(eventPayload);
             eventValidator.validate(event);
+
+            if (eventTimePolicy.isTooLate(event)) {
+                metrics.recordLate();
+                LOGGER.warn("Discarded late platform event: eventId={}", event.eventId());
+                return;
+            }
+            if (!processedEventStore.markIfFirst(event)) {
+                metrics.recordDuplicate();
+                LOGGER.warn("Discarded duplicate platform event: eventId={}", event.eventId());
+                return;
+            }
 
             boolean handled = false;
             for (PlatformEventProcessor processor : processors) {

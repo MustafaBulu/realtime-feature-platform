@@ -21,6 +21,8 @@ The project is intentionally scoped as a streaming infrastructure portfolio proj
 - Worker counters for processed, invalid, and ignored events
 - Tumbling 10-minute entity event-count feature
 - Entity error-rate and average-latency features
+- EventId-based deduplication before feature updates
+- Event-time allowed-lateness policy for late event discard
 
 ## Modules
 
@@ -194,8 +196,6 @@ The platform will grow toward:
 - Entity-key partitioning
 - Event-time windowing
 - Tumbling and sliding windows
-- Late and out-of-order event handling
-- Bounded deduplication
 - RocksDB local state
 - Redis feature materialization
 - Worker restart and Kafka rebalance recovery

@@ -30,6 +30,19 @@ class RequestCountTotalStateStore {
         return next;
     }
 
+    boolean markIfAbsent(String key) {
+        byte[] encodedKey = key.getBytes(StandardCharsets.UTF_8);
+        try {
+            if (database.get(encodedKey) != null) {
+                return false;
+            }
+            database.put(encodedKey, "1".getBytes(StandardCharsets.UTF_8));
+            return true;
+        } catch (RocksDBException ex) {
+            throw new IllegalStateException("Could not update RocksDB marker", ex);
+        }
+    }
+
     @PreDestroy
     void close() {
         database.close();
