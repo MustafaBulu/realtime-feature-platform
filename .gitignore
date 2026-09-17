@@ -1,5 +1,8 @@
 HELP.md
+
+# Local planning notes
 .internal/
+
 data/
 target/
 .mvn/wrapper/maven-wrapper.jar

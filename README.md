@@ -4,7 +4,7 @@ Realtime Feature Platform is a Java 21 backend project for computing low-latency
 
 The project is intentionally scoped as a streaming infrastructure portfolio project, not a payment, billing, banking, ledger, or fraud decision system.
 
-## Capabilities
+## Implemented Prototype Capabilities
 
 - Maven multi-module project structure
 - Java 21 build setup
@@ -23,6 +23,22 @@ The project is intentionally scoped as a streaming infrastructure portfolio proj
 - Entity error-rate and average-latency features
 - EventId-based deduplication before feature updates
 - Event-time allowed-lateness policy for late event discard
+- In-memory feature definition registry
+- Worker debug endpoint for active feature definitions
+
+## Planned Platform Capabilities
+
+The current worker still contains domain-specific processors for the prototype features. The next implementation stages move those behaviors behind declarative feature definitions and a generic aggregation engine.
+
+- Feature definitions loaded from registry metadata
+- Adding standard features without adding Java processor classes
+- Generic `count`, `sum`, `avg`, and exact `distinct_count` aggregators
+- Tumbling and sliding windows driven by event time
+- Bounded deduplication with retention and cleanup
+- Late-event correction inside allowed lateness
+- Batch serving, freshness metadata, and definition-version metadata
+- Worker restart and Kafka rebalance recovery semantics
+- PostgreSQL registry and on-demand benchmark baseline
 
 ## Modules
 
@@ -51,6 +67,8 @@ On Unix-like shells:
 ```bash
 ./mvnw -B verify
 ```
+
+The Testcontainers E2E test is marked `disabledWithoutDocker`, so it is skipped when Docker is not available locally.
 
 ## Run Infrastructure And Apps
 
@@ -101,6 +119,14 @@ GET http://localhost:8080/actuator/prometheus
 GET http://localhost:8081/actuator/prometheus
 GET http://localhost:8082/actuator/prometheus
 ```
+
+Worker feature-definition debug endpoint:
+
+```text
+GET http://localhost:8081/internal/feature-definitions
+```
+
+The endpoint exposes the active in-memory definitions loaded by the worker. These definitions are metadata only until the generic aggregation engine replaces the current prototype processors.
 
 ## Happy Path
 
@@ -187,6 +213,21 @@ Expected response value:
   "value": 131.11111111111111
 }
 ```
+
+## Prototype Golden Feature Behavior
+
+The prototype currently materializes these features for the `request.completed` event stream:
+
+| Feature | Processor | Behavior |
+| --- | --- | --- |
+| `request_count_total` | `RequestCountTotalProcessor` | Adds the payload `count` field into an unwindowed total per entity. |
+| `entity_event_count_10m` | `EntityEventCountTenMinuteProcessor` | Counts accepted events per entity in a 10-minute tumbling event-time window and also publishes the latest window value. |
+| `entity_error_rate_10m` | `EntityErrorRateTenMinuteProcessor` | Computes `server_error_count / request_count` over payload `count` in a 10-minute tumbling event-time window. Server errors are `statusCode >= 500`. |
+| `entity_avg_latency_ms_5m` | `EntityAverageLatencyFiveMinuteProcessor` | Computes weighted average latency as `sum(latencyMs * count) / sum(count)` in a 5-minute tumbling event-time window. |
+
+Input validation, duplicate detection, and too-late discard happen before feature updates. Duplicate events are identified by `eventId`. Too-late events are discarded when `eventTime` is older than the configured allowed-lateness cutoff.
+
+The in-memory registry currently seeds metadata for `request_count_total`, `entity_event_count_10m`, and `entity_avg_latency_ms_5m`. The `entity_error_rate_10m` prototype feature remains processor-backed until derived feature support is added.
 
 ## Roadmap
 
