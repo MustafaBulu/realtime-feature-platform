@@ -43,6 +43,23 @@ class RequestCountTotalStateStore {
         }
     }
 
+    String get(String key) {
+        try {
+            byte[] value = database.get(key.getBytes(StandardCharsets.UTF_8));
+            return value == null ? null : new String(value, StandardCharsets.UTF_8);
+        } catch (RocksDBException ex) {
+            throw new IllegalStateException("Could not read RocksDB state", ex);
+        }
+    }
+
+    void put(String key, String value) {
+        try {
+            database.put(key.getBytes(StandardCharsets.UTF_8), value.getBytes(StandardCharsets.UTF_8));
+        } catch (RocksDBException ex) {
+            throw new IllegalStateException("Could not write RocksDB state", ex);
+        }
+    }
+
     @PreDestroy
     void close() {
         database.close();
