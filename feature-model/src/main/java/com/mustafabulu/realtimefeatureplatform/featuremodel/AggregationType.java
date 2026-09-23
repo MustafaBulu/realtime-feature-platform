@@ -4,5 +4,6 @@ public enum AggregationType {
     COUNT,
     SUM,
     AVG,
-    DISTINCT_COUNT
+    DISTINCT_COUNT,
+    RATIO
 }

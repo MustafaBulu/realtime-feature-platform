@@ -71,6 +71,27 @@ class AggregatorTest {
     }
 
     @Test
+    void averageAggregatorSupportsWeightedAverage() {
+        InMemoryAggregationStateStore stateStore = new InMemoryAggregationStateStore();
+        AverageAggregator aggregator = new AverageAggregator();
+        FeatureDefinition definition = weightedDefinition("avg_latency", "latencyMs", "count");
+
+        assertEquals(80.0, aggregator.aggregate(new AggregationInput(
+                definition,
+                event(Map.of("latencyMs", 80L, "count", 100L)),
+                "feature:service:catalog-api:avg_latency",
+                stateStore
+        )));
+        assertEquals(110.0, aggregator.aggregate(new AggregationInput(
+                definition,
+                event(Map.of("latencyMs", 120L, "count", 300L)),
+                "feature:service:catalog-api:avg_latency",
+                stateStore
+        )));
+        assertEquals("44000,400", stateStore.get("feature:service:catalog-api:avg_latency"));
+    }
+
+    @Test
     void distinctCountAggregatorCountsExactUniqueValues() {
         InMemoryAggregationStateStore stateStore = new InMemoryAggregationStateStore();
         DistinctCountAggregator aggregator = new DistinctCountAggregator();
@@ -96,6 +117,27 @@ class AggregatorTest {
         )));
     }
 
+    @Test
+    void ratioAggregatorTracksFilteredNumeratorOverDenominator() {
+        InMemoryAggregationStateStore stateStore = new InMemoryAggregationStateStore();
+        RatioAggregator aggregator = new RatioAggregator();
+        FeatureDefinition definition = ratioDefinition("entity_error_rate_10m", "count");
+
+        assertEquals(0.0, aggregator.aggregate(new AggregationInput(
+                definition,
+                event(Map.of("count", 400L, "statusCode", 200)),
+                "feature:service:catalog-api:entity_error_rate_10m",
+                stateStore
+        )));
+        assertEquals(50.0 / 450.0, aggregator.aggregate(new AggregationInput(
+                definition,
+                event(Map.of("count", 50L, "statusCode", 500)),
+                "feature:service:catalog-api:entity_error_rate_10m",
+                stateStore
+        )));
+        assertEquals("50,450", stateStore.get("feature:service:catalog-api:entity_error_rate_10m"));
+    }
+
     private static PlatformEvent event(Map<String, Object> payload) {
         return new PlatformEvent(
                 "event-1",
@@ -114,6 +156,49 @@ class AggregatorTest {
                 aggregationType,
                 valueField,
                 null,
+                WindowType.NONE,
+                null,
+                null,
+                1,
+                FeatureDefinitionState.ACTIVE
+        );
+    }
+
+    private static FeatureDefinition weightedDefinition(String name, String valueField, String weightField) {
+        return new FeatureDefinition(
+                name,
+                "request.completed",
+                "service",
+                AggregationType.AVG,
+                valueField,
+                weightField,
+                null,
+                WindowType.NONE,
+                null,
+                null,
+                1,
+                FeatureDefinitionState.ACTIVE
+        );
+    }
+
+    private static FeatureDefinition ratioDefinition(String name, String valueField) {
+        return new FeatureDefinition(
+                name,
+                "request.completed",
+                "service",
+                AggregationType.RATIO,
+                valueField,
+                null,
+                new com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureFilter(
+                        "statusCode",
+                        com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureFilterOperator.EXISTS,
+                        null
+                ),
+                new com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureFilter(
+                        "statusCode",
+                        com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureFilterOperator.GTE,
+                        "500"
+                ),
                 WindowType.NONE,
                 null,
                 null,

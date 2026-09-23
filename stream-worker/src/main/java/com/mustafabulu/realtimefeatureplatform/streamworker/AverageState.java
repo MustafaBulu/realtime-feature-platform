@@ -1,9 +1,9 @@
 package com.mustafabulu.realtimefeatureplatform.streamworker;
 
-record AverageState(double sum, long count) {
+record AverageState(double sum, double weight) {
 
     static AverageState empty() {
-        return new AverageState(0.0, 0L);
+        return new AverageState(0.0, 0.0);
     }
 
     static AverageState parse(String value) {
@@ -14,18 +14,18 @@ record AverageState(double sum, long count) {
         if (parts.length != 2) {
             throw new IllegalArgumentException("invalid average state");
         }
-        return new AverageState(Double.parseDouble(parts[0]), Long.parseLong(parts[1]));
+        return new AverageState(Double.parseDouble(parts[0]), Double.parseDouble(parts[1]));
     }
 
-    AverageState add(double value) {
-        return new AverageState(sum + value, count + 1L);
+    AverageState add(double value, double incrementWeight) {
+        return new AverageState(sum + (value * incrementWeight), weight + incrementWeight);
     }
 
     double value() {
-        return count == 0 ? 0.0 : sum / count;
+        return weight == 0.0 ? 0.0 : sum / weight;
     }
 
     String serialize() {
-        return NumericStateFormat.writeNumber(sum) + "," + count;
+        return NumericStateFormat.writeNumber(sum) + "," + NumericStateFormat.writeNumber(weight);
     }
 }

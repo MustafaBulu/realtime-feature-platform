@@ -1,7 +1,7 @@
-package com.mustafabulu.realtimefeatureplatform.streamworker;
+package com.mustafabulu.realtimefeatureplatform.featureapi;
 
 import com.mustafabulu.realtimefeatureplatform.featuremodel.BuiltInFeatureDefinitions;
-import com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureDefinitionRepository;
+import com.mustafabulu.realtimefeatureplatform.featuremodel.MutableFeatureDefinitionRepository;
 import com.mustafabulu.realtimefeatureplatform.featuremodel.MutableInMemoryFeatureDefinitionRepository;
 import com.mustafabulu.realtimefeatureplatform.featureregistry.JdbcFeatureDefinitionRepository;
 import javax.sql.DataSource;
@@ -18,7 +18,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Configuration
-class StreamWorkerFeatureDefinitionConfig {
+class FeatureRegistryConfig {
 
     @Bean
     @ConditionalOnProperty(name = "rfp.feature-registry.store", havingValue = "postgres")
@@ -56,7 +56,7 @@ class StreamWorkerFeatureDefinitionConfig {
 
     @Bean
     @ConditionalOnProperty(name = "rfp.feature-registry.store", havingValue = "postgres")
-    FeatureDefinitionRepository jdbcFeatureDefinitionRepository(
+    MutableFeatureDefinitionRepository jdbcFeatureDefinitionRepository(
             JdbcTemplate jdbcTemplate,
             TransactionTemplate transactionTemplate
     ) {
@@ -64,8 +64,8 @@ class StreamWorkerFeatureDefinitionConfig {
     }
 
     @Bean
-    @ConditionalOnMissingBean(FeatureDefinitionRepository.class)
-    FeatureDefinitionRepository featureDefinitionRepository() {
+    @ConditionalOnMissingBean(MutableFeatureDefinitionRepository.class)
+    MutableFeatureDefinitionRepository featureDefinitionRepository() {
         return new MutableInMemoryFeatureDefinitionRepository(BuiltInFeatureDefinitions.all());
     }
 }

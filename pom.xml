@@ -21,6 +21,7 @@
     <modules>
         <module>event-model</module>
         <module>feature-model</module>
+        <module>feature-registry</module>
         <module>feature-api</module>
         <module>stream-worker</module>
         <module>workload-generator</module>

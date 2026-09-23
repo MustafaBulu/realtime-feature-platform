@@ -3,7 +3,6 @@ package com.mustafabulu.realtimefeatureplatform.streamworker;
 import com.mustafabulu.realtimefeatureplatform.eventmodel.PlatformEvent;
 import com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureDefinition;
 import com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureKey;
-import com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureValue;
 import com.mustafabulu.realtimefeatureplatform.featuremodel.WindowType;
 import com.mustafabulu.realtimefeatureplatform.featuremodel.WindowedFeatureKey;
 import java.time.Instant;
@@ -27,7 +26,13 @@ class GenericAggregationEngine {
         this.stateStore = stateStore;
     }
 
-    List<FeatureValue> process(PlatformEvent event) {
+    boolean supports(PlatformEvent event) {
+        return definitionLoader.activeDefinitions().stream()
+                .anyMatch(definition -> matchesEvent(definition, event)
+                        && FeatureFilterEvaluator.matches(event, definition.filter()));
+    }
+
+    List<AggregationResult> process(PlatformEvent event) {
         return definitionLoader.activeDefinitions().stream()
                 .filter(definition -> matchesEvent(definition, event))
                 .filter(definition -> FeatureFilterEvaluator.matches(event, definition.filter()))
@@ -35,13 +40,13 @@ class GenericAggregationEngine {
                 .toList();
     }
 
-    private FeatureValue updateFeature(FeatureDefinition definition, PlatformEvent event) {
+    private AggregationResult updateFeature(FeatureDefinition definition, PlatformEvent event) {
         FeatureKey featureKey = new FeatureKey(event.entity().type(), event.entity().id(), definition.name());
         String stateKey = stateKey(definition, event, featureKey);
         Aggregator aggregator = aggregatorRegistry.get(definition.aggregationType());
         Number value = aggregator.aggregate(new AggregationInput(definition, event, stateKey, stateStore));
 
-        return new FeatureValue(featureKey, value, Instant.now());
+        return new AggregationResult(definition, featureKey, stateKey, value, Instant.now());
     }
 
     private static boolean matchesEvent(FeatureDefinition definition, PlatformEvent event) {

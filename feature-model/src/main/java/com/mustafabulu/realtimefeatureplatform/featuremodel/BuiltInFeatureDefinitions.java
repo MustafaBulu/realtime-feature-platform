@@ -15,6 +15,7 @@ public final class BuiltInFeatureDefinitions {
         return List.of(
                 requestCountTotal(),
                 entityEventCountTenMinute(),
+                entityErrorRateTenMinute(),
                 entityAverageLatencyFiveMinute()
         );
     }
@@ -26,6 +27,7 @@ public final class BuiltInFeatureDefinitions {
                 SERVICE_ENTITY_TYPE,
                 AggregationType.SUM,
                 "count",
+                null,
                 null,
                 WindowType.NONE,
                 null,
@@ -43,6 +45,7 @@ public final class BuiltInFeatureDefinitions {
                 AggregationType.COUNT,
                 null,
                 null,
+                null,
                 WindowType.TUMBLING,
                 Duration.ofMinutes(10),
                 null,
@@ -58,9 +61,28 @@ public final class BuiltInFeatureDefinitions {
                 SERVICE_ENTITY_TYPE,
                 AggregationType.AVG,
                 "latencyMs",
+                "count",
                 new FeatureFilter("latencyMs", FeatureFilterOperator.EXISTS, null),
                 WindowType.TUMBLING,
                 Duration.ofMinutes(5),
+                null,
+                1,
+                FeatureDefinitionState.ACTIVE
+        );
+    }
+
+    private static FeatureDefinition entityErrorRateTenMinute() {
+        return new FeatureDefinition(
+                FeatureNames.ENTITY_ERROR_RATE_10M,
+                REQUEST_COMPLETED,
+                SERVICE_ENTITY_TYPE,
+                AggregationType.RATIO,
+                "count",
+                null,
+                new FeatureFilter("statusCode", FeatureFilterOperator.EXISTS, null),
+                new FeatureFilter("statusCode", FeatureFilterOperator.GTE, "500"),
+                WindowType.TUMBLING,
+                Duration.ofMinutes(10),
                 null,
                 1,
                 FeatureDefinitionState.ACTIVE

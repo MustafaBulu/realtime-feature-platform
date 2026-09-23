@@ -24,13 +24,16 @@ The project is intentionally scoped as a streaming infrastructure portfolio proj
 - EventId-based deduplication before feature updates
 - Event-time allowed-lateness policy for late event discard
 - In-memory feature definition registry
+- PostgreSQL-backed feature definition registry
+- Feature registry persistence, versioning, and draft/active lifecycle
+- Registry endpoints for definition save, activation, and deactivation
+- Worker feature-definition reload with last-successful snapshot fallback
 - Worker debug endpoint for active feature definitions
 
 ## Planned Platform Capabilities
 
-The current worker still contains domain-specific processors for the prototype features. The next implementation stages move those behaviors behind declarative feature definitions and a generic aggregation engine.
+The current worker computes the prototype features through declarative feature definitions and the generic aggregation engine. The next implementation stages harden window correctness, event-time behavior, serving semantics, recovery, and benchmark evidence.
 
-- Feature definitions loaded from registry metadata
 - Adding standard features without adding Java processor classes
 - Generic `count`, `sum`, `avg`, and exact `distinct_count` aggregators
 - Tumbling and sliding windows driven by event time
@@ -38,7 +41,7 @@ The current worker still contains domain-specific processors for the prototype f
 - Late-event correction inside allowed lateness
 - Batch serving, freshness metadata, and definition-version metadata
 - Worker restart and Kafka rebalance recovery semantics
-- PostgreSQL registry and on-demand benchmark baseline
+- PostgreSQL on-demand benchmark baseline
 
 ## Modules
 
@@ -46,6 +49,7 @@ The current worker still contains domain-specific processors for the prototype f
 | --- | --- |
 | `event-model` | Domain-independent event records |
 | `feature-model` | Feature definition and aggregation model |
+| `feature-registry` | PostgreSQL feature registry repository and migration |
 | `feature-api` | Online feature serving API skeleton |
 | `stream-worker` | Stream processing worker skeleton |
 | `workload-generator` | Synthetic event generator skeleton |
@@ -126,7 +130,16 @@ Worker feature-definition debug endpoint:
 GET http://localhost:8081/internal/feature-definitions
 ```
 
-The endpoint exposes the active in-memory definitions loaded by the worker. These definitions are metadata only until the generic aggregation engine replaces the current prototype processors.
+The endpoint exposes the active definitions loaded by the worker. When `rfp.feature-registry.store=postgres`, the worker polls the PostgreSQL registry and keeps using the last successful definition snapshot if a later reload fails.
+
+Feature registry endpoints:
+
+```text
+GET  http://localhost:8080/registry/definitions
+POST http://localhost:8080/registry/definitions
+POST http://localhost:8080/registry/definitions/{name}/versions/{version}/activate
+POST http://localhost:8080/registry/definitions/{name}/versions/{version}/deactivate
+```
 
 ## Happy Path
 
@@ -218,16 +231,16 @@ Expected response value:
 
 The prototype currently materializes these features for the `request.completed` event stream:
 
-| Feature | Processor | Behavior |
+| Feature | Path | Behavior |
 | --- | --- | --- |
-| `request_count_total` | `RequestCountTotalProcessor` | Adds the payload `count` field into an unwindowed total per entity. |
-| `entity_event_count_10m` | `EntityEventCountTenMinuteProcessor` | Counts accepted events per entity in a 10-minute tumbling event-time window and also publishes the latest window value. |
-| `entity_error_rate_10m` | `EntityErrorRateTenMinuteProcessor` | Computes `server_error_count / request_count` over payload `count` in a 10-minute tumbling event-time window. Server errors are `statusCode >= 500`. |
-| `entity_avg_latency_ms_5m` | `EntityAverageLatencyFiveMinuteProcessor` | Computes weighted average latency as `sum(latencyMs * count) / sum(count)` in a 5-minute tumbling event-time window. |
+| `request_count_total` | Generic engine | Adds the payload `count` field into an unwindowed total per entity. |
+| `entity_event_count_10m` | Generic engine | Counts accepted events per entity in a 10-minute tumbling event-time window and also publishes the latest window value. |
+| `entity_error_rate_10m` | Generic derived ratio | Computes `server_error_count / request_count` over payload `count` in a 10-minute tumbling event-time window. Server errors are `statusCode >= 500`. |
+| `entity_avg_latency_ms_5m` | Generic engine | Computes weighted average latency as `sum(latencyMs * count) / sum(count)` in a 5-minute tumbling event-time window. |
 
 Input validation, duplicate detection, and too-late discard happen before feature updates. Duplicate events are identified by `eventId`. Too-late events are discarded when `eventTime` is older than the configured allowed-lateness cutoff.
 
-The in-memory registry currently seeds metadata for `request_count_total`, `entity_event_count_10m`, and `entity_avg_latency_ms_5m`. The `entity_error_rate_10m` prototype feature remains processor-backed until derived feature support is added.
+The in-memory registry currently seeds metadata for `request_count_total`, `entity_event_count_10m`, `entity_error_rate_10m`, and `entity_avg_latency_ms_5m`.
 
 ## Roadmap
 

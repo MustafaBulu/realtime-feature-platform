@@ -16,7 +16,7 @@ class BuiltInFeatureDefinitionsTest {
         Map<String, FeatureDefinition> definitions = BuiltInFeatureDefinitions.all().stream()
                 .collect(Collectors.toMap(FeatureDefinition::name, Function.identity()));
 
-        assertEquals(3, definitions.size());
+        assertEquals(4, definitions.size());
         assertTrue(definitions.values().stream()
                 .allMatch(definition -> definition.state() == FeatureDefinitionState.ACTIVE));
 
@@ -33,6 +33,14 @@ class BuiltInFeatureDefinitionsTest {
         FeatureDefinition avg5m = definitions.get(FeatureNames.ENTITY_AVG_LATENCY_MS_5M);
         assertEquals(AggregationType.AVG, avg5m.aggregationType());
         assertEquals("latencyMs", avg5m.valueField());
+        assertEquals("count", avg5m.weightField());
         assertEquals(Duration.ofMinutes(5), avg5m.windowSize());
+
+        FeatureDefinition errorRate10m = definitions.get(FeatureNames.ENTITY_ERROR_RATE_10M);
+        assertEquals(AggregationType.RATIO, errorRate10m.aggregationType());
+        assertEquals("count", errorRate10m.valueField());
+        assertEquals(FeatureFilterOperator.EXISTS, errorRate10m.filter().operator());
+        assertEquals(FeatureFilterOperator.GTE, errorRate10m.numeratorFilter().operator());
+        assertEquals(Duration.ofMinutes(10), errorRate10m.windowSize());
     }
 }

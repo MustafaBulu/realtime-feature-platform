@@ -18,8 +18,8 @@ class FeatureDefinitionDebugControllerTest {
 
         FeatureDefinitionDebugController.FeatureDefinitionDebugResponse response = controller.definitions();
 
-        assertEquals(3, response.totalDefinitions());
-        assertEquals(3, response.activeDefinitions());
+        assertEquals(4, response.totalDefinitions());
+        assertEquals(4, response.activeDefinitions());
         assertEquals(FeatureNames.REQUEST_COUNT_TOTAL, response.definitions().getFirst().name());
     }
 }

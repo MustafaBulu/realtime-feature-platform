@@ -9,7 +9,9 @@ public record FeatureDefinition(
         String entityType,
         AggregationType aggregationType,
         String valueField,
+        String weightField,
         FeatureFilter filter,
+        FeatureFilter numeratorFilter,
         WindowType windowType,
         Duration windowSize,
         Duration slide,
@@ -34,11 +36,74 @@ public record FeatureDefinition(
                 aggregationType,
                 null,
                 null,
+                null,
+                null,
                 windowType,
                 windowSize,
                 slide,
                 1,
                 FeatureDefinitionState.ACTIVE
+        );
+    }
+
+    public FeatureDefinition(
+            String name,
+            String eventType,
+            String entityType,
+            AggregationType aggregationType,
+            String valueField,
+            FeatureFilter filter,
+            WindowType windowType,
+            Duration windowSize,
+            Duration slide,
+            int version,
+            FeatureDefinitionState state
+    ) {
+        this(
+                name,
+                eventType,
+                entityType,
+                aggregationType,
+                valueField,
+                null,
+                filter,
+                null,
+                windowType,
+                windowSize,
+                slide,
+                version,
+                state
+        );
+    }
+
+    public FeatureDefinition(
+            String name,
+            String eventType,
+            String entityType,
+            AggregationType aggregationType,
+            String valueField,
+            String weightField,
+            FeatureFilter filter,
+            WindowType windowType,
+            Duration windowSize,
+            Duration slide,
+            int version,
+            FeatureDefinitionState state
+    ) {
+        this(
+                name,
+                eventType,
+                entityType,
+                aggregationType,
+                valueField,
+                weightField,
+                filter,
+                null,
+                windowType,
+                windowSize,
+                slide,
+                version,
+                state
         );
     }
 
@@ -68,6 +133,12 @@ public record FeatureDefinition(
         } else if (valueField != null && !valueField.isBlank()) {
             FeatureDefinitionFields.requireValidFieldPath(valueField, "valueField");
         }
+        if (weightField != null && !weightField.isBlank()) {
+            FeatureDefinitionFields.requireValidFieldPath(weightField, "weightField");
+        }
+        if (aggregationType == AggregationType.RATIO && numeratorFilter == null) {
+            throw new IllegalArgumentException("ratio definitions must define numeratorFilter");
+        }
 
         if (windowType == WindowType.NONE) {
             if (windowSize != null || slide != null) {
@@ -92,6 +163,7 @@ public record FeatureDefinition(
     private static boolean requiresValueField(AggregationType aggregationType) {
         return aggregationType == AggregationType.SUM
                 || aggregationType == AggregationType.AVG
-                || aggregationType == AggregationType.DISTINCT_COUNT;
+                || aggregationType == AggregationType.DISTINCT_COUNT
+                || aggregationType == AggregationType.RATIO;
     }
 }

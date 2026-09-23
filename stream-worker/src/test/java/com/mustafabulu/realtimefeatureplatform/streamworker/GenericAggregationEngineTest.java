@@ -10,7 +10,6 @@ import com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureDefinitionRep
 import com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureDefinitionState;
 import com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureFilter;
 import com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureFilterOperator;
-import com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureValue;
 import com.mustafabulu.realtimefeatureplatform.featuremodel.InMemoryFeatureDefinitionRepository;
 import com.mustafabulu.realtimefeatureplatform.featuremodel.WindowType;
 import java.time.Duration;
@@ -26,7 +25,7 @@ class GenericAggregationEngineTest {
         GenericAggregationEngine engine = engine(stateStore, List.of(
                 definition("request_count_total", AggregationType.SUM, "count", null, WindowType.NONE, null),
                 definition("entity_event_count_10m", AggregationType.COUNT, null, null, WindowType.TUMBLING, Duration.ofMinutes(10)),
-                definition("entity_avg_latency_ms_5m", AggregationType.AVG, "latencyMs", null, WindowType.TUMBLING, Duration.ofMinutes(5))
+                weightedDefinition("entity_avg_latency_ms_5m", "latencyMs", "count", WindowType.TUMBLING, Duration.ofMinutes(5))
         ));
         PlatformEvent event = RequestCompletedEventFactory.create(
                 "event-1",
@@ -38,7 +37,7 @@ class GenericAggregationEngineTest {
                 Instant.parse("2026-08-28T12:14:59.999Z")
         );
 
-        List<FeatureValue> values = engine.process(event);
+        List<AggregationResult> values = engine.process(event);
 
         assertEquals(3, values.size());
         assertEquals(100L, values.get(0).value());
@@ -46,7 +45,9 @@ class GenericAggregationEngineTest {
         assertEquals(80.0, values.get(2).value());
         assertEquals("100", stateStore.get("feature:service:catalog-api:request_count_total"));
         assertEquals("1", stateStore.get("feature:service:catalog-api:entity_event_count_10m:window:1787919000000"));
-        assertEquals("80,1", stateStore.get("feature:service:catalog-api:entity_avg_latency_ms_5m:window:1787919000000"));
+        assertEquals("8000,100", stateStore.get("feature:service:catalog-api:entity_avg_latency_ms_5m:window:1787919000000"));
+        assertEquals("feature:service:catalog-api:entity_avg_latency_ms_5m:window:1787919000000",
+                values.get(2).materializedKey());
     }
 
     @Test
@@ -85,7 +86,8 @@ class GenericAggregationEngineTest {
                 new CountAggregator(),
                 new SumAggregator(),
                 new AverageAggregator(),
-                new DistinctCountAggregator()
+                new DistinctCountAggregator(),
+                new RatioAggregator()
         ));
         return new GenericAggregationEngine(loader, registry, stateStore);
     }
@@ -105,6 +107,29 @@ class GenericAggregationEngineTest {
                 aggregationType,
                 valueField,
                 filter,
+                windowType,
+                windowSize,
+                null,
+                1,
+                FeatureDefinitionState.ACTIVE
+        );
+    }
+
+    private static FeatureDefinition weightedDefinition(
+            String name,
+            String valueField,
+            String weightField,
+            WindowType windowType,
+            Duration windowSize
+    ) {
+        return new FeatureDefinition(
+                name,
+                "request.completed",
+                "service",
+                AggregationType.AVG,
+                valueField,
+                weightField,
+                null,
                 windowType,
                 windowSize,
                 null,

@@ -68,6 +68,10 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/realtime_features
+      SPRING_DATASOURCE_USERNAME: realtime
+      SPRING_DATASOURCE_PASSWORD: realtime
+      RFP_FEATURE_REGISTRY_STORE: postgres
     depends_on:
       kafka:
         condition: service_healthy
@@ -95,6 +99,10 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/realtime_features
+      SPRING_DATASOURCE_USERNAME: realtime
+      SPRING_DATASOURCE_PASSWORD: realtime
+      RFP_FEATURE_REGISTRY_STORE: postgres
       RFP_ROCKSDB_PATH: /var/lib/rfp/rocksdb
     volumes:
       - stream-worker-state:/var/lib/rfp/rocksdb
