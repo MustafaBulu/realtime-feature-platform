@@ -3,7 +3,6 @@ package com.mustafabulu.realtimefeatureplatform.streamworker;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.mustafabulu.realtimefeatureplatform.eventmodel.PlatformEvent;
-import com.mustafabulu.realtimefeatureplatform.eventmodel.RequestCompletedEventFactory;
 import com.mustafabulu.realtimefeatureplatform.featuremodel.AggregationType;
 import com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureDefinition;
 import com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureDefinitionState;
@@ -74,7 +73,7 @@ class AggregatorTest {
     void averageAggregatorSupportsWeightedAverage() {
         InMemoryAggregationStateStore stateStore = new InMemoryAggregationStateStore();
         AverageAggregator aggregator = new AverageAggregator();
-        FeatureDefinition definition = weightedDefinition("avg_latency", "latencyMs", "count");
+        FeatureDefinition definition = weightedAverageDefinition();
 
         assertEquals(80.0, aggregator.aggregate(new AggregationInput(
                 definition,
@@ -121,7 +120,7 @@ class AggregatorTest {
     void ratioAggregatorTracksFilteredNumeratorOverDenominator() {
         InMemoryAggregationStateStore stateStore = new InMemoryAggregationStateStore();
         RatioAggregator aggregator = new RatioAggregator();
-        FeatureDefinition definition = ratioDefinition("entity_error_rate_10m", "count");
+        FeatureDefinition definition = errorRateDefinition();
 
         assertEquals(0.0, aggregator.aggregate(new AggregationInput(
                 definition,
@@ -164,14 +163,14 @@ class AggregatorTest {
         );
     }
 
-    private static FeatureDefinition weightedDefinition(String name, String valueField, String weightField) {
+    private static FeatureDefinition weightedAverageDefinition() {
         return new FeatureDefinition(
-                name,
+                "avg_latency",
                 "request.completed",
                 "service",
                 AggregationType.AVG,
-                valueField,
-                weightField,
+                "latencyMs",
+                "count",
                 null,
                 WindowType.NONE,
                 null,
@@ -181,13 +180,13 @@ class AggregatorTest {
         );
     }
 
-    private static FeatureDefinition ratioDefinition(String name, String valueField) {
+    private static FeatureDefinition errorRateDefinition() {
         return new FeatureDefinition(
-                name,
+                "entity_error_rate_10m",
                 "request.completed",
                 "service",
                 AggregationType.RATIO,
-                valueField,
+                "count",
                 null,
                 new com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureFilter(
                         "statusCode",

@@ -1,5 +1,6 @@
 package com.mustafabulu.realtimefeatureplatform.featureapi;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -38,11 +39,12 @@ class FeatureControllerTest {
         );
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        FeatureController.FeatureReadResponse body = response.getBody();
-        assertEquals(450L, body.value());
-        assertEquals(FeatureController.FeatureReadStatus.PRESENT, body.metadata().status());
-        assertEquals(60_000L, body.metadata().freshnessMillis());
-        assertEquals(1, body.metadata().definitionVersion());
+        FeatureController.FeatureReadResponse body = requireNonNull(response.getBody());
+        FeatureController.FeatureMetadata metadata = requireNonNull(body.metadata());
+        assertEquals(450L, requireNonNull(body.value()));
+        assertEquals(FeatureController.FeatureReadStatus.PRESENT, metadata.status());
+        assertEquals(60_000L, metadata.freshnessMillis());
+        assertEquals(1, metadata.definitionVersion());
     }
 
     @Test
@@ -64,9 +66,11 @@ class FeatureControllerTest {
                 null
         );
 
-        assertEquals(0L, zeroResponse.getBody().value());
-        assertEquals(FeatureController.FeatureReadStatus.PRESENT, zeroResponse.getBody().metadata().status());
-        assertEquals(FeatureController.FeatureReadStatus.MISSING, missingResponse.getBody().metadata().status());
+        FeatureController.FeatureReadResponse zeroBody = requireNonNull(zeroResponse.getBody());
+        FeatureController.FeatureReadResponse missingBody = requireNonNull(missingResponse.getBody());
+        assertEquals(0L, requireNonNull(zeroBody.value()));
+        assertEquals(FeatureController.FeatureReadStatus.PRESENT, requireNonNull(zeroBody.metadata()).status());
+        assertEquals(FeatureController.FeatureReadStatus.MISSING, requireNonNull(missingBody.metadata()).status());
     }
 
     @Test
@@ -84,9 +88,9 @@ class FeatureControllerTest {
         );
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        FeatureController.FeatureReadResponse body = response.getBody();
-        assertEquals(windowStart, body.windowStart());
-        assertEquals(0.25, body.value());
+        FeatureController.FeatureReadResponse body = requireNonNull(response.getBody());
+        assertEquals(windowStart, requireNonNull(body.windowStart()));
+        assertEquals(0.25, requireNonNull(body.value()));
     }
 
     @Test
@@ -102,9 +106,11 @@ class FeatureControllerTest {
                 List.of(FeatureNames.REQUEST_COUNT_TOTAL, FeatureNames.ENTITY_EVENT_COUNT_10M)
         );
 
-        assertEquals(2, response.getBody().features().size());
-        assertEquals(450L, response.getBody().features().get(0).value());
-        assertEquals(3L, response.getBody().features().get(1).value());
+        List<FeatureController.FeatureReadResponse> features =
+                requireNonNull(requireNonNull(response.getBody()).features());
+        assertEquals(2, features.size());
+        assertEquals(450L, requireNonNull(features.get(0).value()));
+        assertEquals(3L, requireNonNull(features.get(1).value()));
     }
 
     @Test
@@ -131,8 +137,10 @@ class FeatureControllerTest {
                 ))
         );
 
-        assertEquals(2, response.getBody().features().size());
-        assertEquals(25L, response.getBody().features().get(1).value());
+        List<FeatureController.FeatureReadResponse> features =
+                requireNonNull(requireNonNull(response.getBody()).features());
+        assertEquals(2, features.size());
+        assertEquals(25L, requireNonNull(features.get(1).value()));
     }
 
     @Test
@@ -150,7 +158,8 @@ class FeatureControllerTest {
                 null
         );
 
-        assertEquals(FeatureController.FeatureReadStatus.STALE, response.getBody().metadata().status());
+        FeatureController.FeatureReadResponse body = requireNonNull(response.getBody());
+        assertEquals(FeatureController.FeatureReadStatus.STALE, requireNonNull(body.metadata()).status());
         assertEquals(1.0, meterRegistry.counter("rfp.feature_api.redis.reads", "status", "stale").count());
     }
 
@@ -167,7 +176,8 @@ class FeatureControllerTest {
                 null
         );
 
-        assertEquals(FeatureController.FeatureReadStatus.UNAVAILABLE, response.getBody().metadata().status());
+        FeatureController.FeatureReadResponse body = requireNonNull(response.getBody());
+        assertEquals(FeatureController.FeatureReadStatus.UNAVAILABLE, requireNonNull(body.metadata()).status());
     }
 
     @SuppressWarnings("unchecked")

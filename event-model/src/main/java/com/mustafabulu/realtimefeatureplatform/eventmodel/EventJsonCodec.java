@@ -12,6 +12,7 @@ public final class EventJsonCodec {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
+    private static final String EVENT_TYPE_FIELD = "eventType";
 
     private EventJsonCodec() {
     }
@@ -20,7 +21,7 @@ public final class EventJsonCodec {
         try {
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("eventId", event.eventId());
-            body.put("eventType", event.eventType());
+            body.put(EVENT_TYPE_FIELD, event.eventType());
             body.put("eventTime", event.eventTime().toString());
             body.put("entity", Map.of(
                     "type", event.entity().type(),
@@ -43,7 +44,7 @@ public final class EventJsonCodec {
 
             return new PlatformEvent(
                     stringValue(body, "eventId"),
-                    stringValue(body, "eventType"),
+                    stringValue(body, EVENT_TYPE_FIELD),
                     Instant.parse(stringValue(body, "eventTime")),
                     new EntityRef(stringValue(entity, "type"), stringValue(entity, "id")),
                     payload
@@ -54,7 +55,7 @@ public final class EventJsonCodec {
     }
 
     private static void normalizeRequestCompletedPayload(Map<String, Object> body, Map<String, Object> payload) {
-        if (!"request.completed".equals(body.get("eventType"))) {
+        if (!"request.completed".equals(body.get(EVENT_TYPE_FIELD))) {
             return;
         }
 

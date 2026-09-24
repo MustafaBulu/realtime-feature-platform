@@ -35,8 +35,8 @@ class RequestCountTotalConsumer {
     }
 
     @KafkaListener(topics = "${rfp.kafka.events-topic}")
-    void consume(ConsumerRecord<String, String> record) {
-        consume(record.value(), record.topic() + "-" + record.partition());
+    void consume(ConsumerRecord<String, String> consumerRecord) {
+        consume(consumerRecord.value(), consumerRecord.topic() + "-" + consumerRecord.partition());
     }
 
     void consume(String eventPayload) {

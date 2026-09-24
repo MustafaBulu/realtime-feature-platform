@@ -25,7 +25,7 @@ class GenericAggregationEngineTest {
         GenericAggregationEngine engine = engine(stateStore, List.of(
                 definition("request_count_total", AggregationType.SUM, "count", null, WindowType.NONE, null),
                 definition("entity_event_count_10m", AggregationType.COUNT, null, null, WindowType.TUMBLING, Duration.ofMinutes(10)),
-                weightedDefinition("entity_avg_latency_ms_5m", "latencyMs", "count", WindowType.TUMBLING, Duration.ofMinutes(5))
+                averageLatencyDefinition()
         ));
         PlatformEvent event = RequestCompletedEventFactory.create(
                 "event-1",
@@ -115,23 +115,17 @@ class GenericAggregationEngineTest {
         );
     }
 
-    private static FeatureDefinition weightedDefinition(
-            String name,
-            String valueField,
-            String weightField,
-            WindowType windowType,
-            Duration windowSize
-    ) {
+    private static FeatureDefinition averageLatencyDefinition() {
         return new FeatureDefinition(
-                name,
+                "entity_avg_latency_ms_5m",
                 "request.completed",
                 "service",
                 AggregationType.AVG,
-                valueField,
-                weightField,
+                "latencyMs",
+                "count",
                 null,
-                windowType,
-                windowSize,
+                WindowType.TUMBLING,
+                Duration.ofMinutes(5),
                 null,
                 1,
                 FeatureDefinitionState.ACTIVE

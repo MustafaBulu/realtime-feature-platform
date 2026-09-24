@@ -1,0 +1,14 @@
+{
+  "properties": [
+    {
+      "name": "rfp.rocksdb.path",
+      "type": "java.nio.file.Path",
+      "description": "Filesystem path used by the stream worker RocksDB state store."
+    },
+    {
+      "name": "spring.kafka.listener.auto-startup",
+      "type": "java.lang.Boolean",
+      "description": "Whether Kafka listener containers should start automatically."
+    }
+  ]
+}

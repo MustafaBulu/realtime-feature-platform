@@ -27,7 +27,7 @@ public class EventValidator {
             throw new EventValidationException("eventTime must not be too far in the future");
         }
         if ("request.completed".equals(event.eventType())) {
-            long count = requiredLong(event, "count");
+            long count = requiredCount(event);
             if (count < 0) {
                 throw new EventValidationException("request.completed count must not be negative");
             }
@@ -44,10 +44,10 @@ public class EventValidator {
         }
     }
 
-    private static long requiredLong(PlatformEvent event, String fieldName) {
-        return optionalLong(event, fieldName)
+    private static long requiredCount(PlatformEvent event) {
+        return optionalLong(event, "count")
                 .orElseThrow(() -> new EventValidationException(
-                        "request.completed payload must contain numeric " + fieldName));
+                        "request.completed payload must contain numeric count"));
     }
 
     private static java.util.Optional<Long> optionalLong(PlatformEvent event, String fieldName) {

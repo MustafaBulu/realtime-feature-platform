@@ -55,10 +55,6 @@ class ProcessedEventStore {
         this.nextCleanupAt = Instant.EPOCH;
     }
 
-    boolean markIfFirst(PlatformEvent event) {
-        return markIfFirst(event, DEFAULT_PARTITION_NAMESPACE);
-    }
-
     boolean markIfFirst(PlatformEvent event, String partitionNamespace) {
         Instant now = clock.instant();
         cleanupIfDue(now);

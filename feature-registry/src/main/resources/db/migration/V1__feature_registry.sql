@@ -21,17 +21,37 @@ create table if not exists feature_definitions (
     primary key (name, version)
 );
 
+with seed_values as (
+    select
+        'request.completed' as request_completed_event,
+        'service' as service_entity_type,
+        'count' as count_field,
+        'statusCode' as status_code_field,
+        'latencyMs' as latency_ms_field,
+        'TUMBLING' as tumbling_window,
+        'PT10M' as ten_minute_window,
+        'PT5M' as five_minute_window,
+        'ACTIVE' as active_state
+)
 insert into feature_definitions
 (name, version, event_type, entity_type, aggregation_type, value_field, weight_field,
  filter_field, filter_operator, filter_value, numerator_filter_field, numerator_filter_operator,
  numerator_filter_value, window_type, window_size, slide, state)
-values
-('request_count_total', 1, 'request.completed', 'service', 'SUM', 'count', null,
- null, null, null, null, null, null, 'NONE', null, null, 'ACTIVE'),
-('entity_event_count_10m', 1, 'request.completed', 'service', 'COUNT', null, null,
- null, null, null, null, null, null, 'TUMBLING', 'PT10M', 'PT10M', 'ACTIVE'),
-('entity_error_rate_10m', 1, 'request.completed', 'service', 'RATIO', 'count', null,
- 'statusCode', 'EXISTS', null, 'statusCode', 'GTE', '500', 'TUMBLING', 'PT10M', 'PT10M', 'ACTIVE'),
-('entity_avg_latency_ms_5m', 1, 'request.completed', 'service', 'AVG', 'latencyMs', 'count',
- 'latencyMs', 'EXISTS', null, null, null, null, 'TUMBLING', 'PT5M', 'PT5M', 'ACTIVE')
+select 'request_count_total', 1, request_completed_event, service_entity_type, 'SUM', count_field, null,
+       null, null, null, null, null, null, 'NONE', null, null, active_state
+from seed_values
+union all
+select 'entity_event_count_10m', 1, request_completed_event, service_entity_type, 'COUNT', null, null,
+       null, null, null, null, null, null, tumbling_window, ten_minute_window, ten_minute_window, active_state
+from seed_values
+union all
+select 'entity_error_rate_10m', 1, request_completed_event, service_entity_type, 'RATIO', count_field, null,
+       status_code_field, 'EXISTS', null, status_code_field, 'GTE', '500',
+       tumbling_window, ten_minute_window, ten_minute_window, active_state
+from seed_values
+union all
+select 'entity_avg_latency_ms_5m', 1, request_completed_event, service_entity_type, 'AVG', latency_ms_field, count_field,
+       latency_ms_field, 'EXISTS', null, null, null, null, tumbling_window, five_minute_window, five_minute_window,
+       active_state
+from seed_values
 on conflict (name, version) do nothing;

@@ -47,7 +47,10 @@ class EventTimePolicyTest {
 
     @Test
     void rejectsNegativeAllowedLateness() {
+        Clock clock = Clock.systemUTC();
+        Duration allowedLateness = Duration.ofMillis(-1);
+
         assertThrows(IllegalArgumentException.class,
-                () -> new EventTimePolicy(Clock.systemUTC(), Duration.ofMillis(-1)));
+                () -> new EventTimePolicy(clock, allowedLateness));
     }
 }

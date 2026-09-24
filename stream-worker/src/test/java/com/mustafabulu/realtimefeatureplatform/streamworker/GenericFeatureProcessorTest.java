@@ -1,6 +1,7 @@
 package com.mustafabulu.realtimefeatureplatform.streamworker;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -20,9 +21,9 @@ import org.springframework.data.redis.core.ValueOperations;
 class GenericFeatureProcessorTest {
 
     private final InMemoryAggregationStateStore stateStore = new InMemoryAggregationStateStore();
-    private final StringRedisTemplate redisTemplate = org.mockito.Mockito.mock(StringRedisTemplate.class);
+    private final StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
     @SuppressWarnings("unchecked")
-    private final ValueOperations<String, String> valueOperations = org.mockito.Mockito.mock(ValueOperations.class);
+    private final ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
     private final GenericFeatureProcessor processor = new GenericFeatureProcessor(engine(), redisTemplate);
 
     @BeforeEach

@@ -2,6 +2,7 @@ package com.mustafabulu.realtimefeatureplatform.workloadgenerator;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mustafabulu.realtimefeatureplatform.featureapi.FeatureApiApplication;
 import com.mustafabulu.realtimefeatureplatform.streamworker.StreamWorkerApplication;
@@ -27,6 +28,7 @@ import tools.jackson.databind.ObjectMapper;
 
 @DisabledIfEnvironmentVariable(named = "CI", matches = "true")
 @Testcontainers(disabledWithoutDocker = true)
+@SuppressWarnings("resource")
 class RequestCountTotalE2ETest {
 
     @Container
@@ -49,6 +51,7 @@ class RequestCountTotalE2ETest {
                 ConfigurableApplicationContext api = startApi();
                 ConfigurableApplicationContext generator = startGenerator()
         ) {
+            assertTrue(worker.isActive());
             int apiPort = port(api);
             int generatorPort = port(generator);
 

@@ -21,7 +21,9 @@ class TumblingWindowTest {
 
     @Test
     void rejectsNonPositiveWindowSize() {
+        Instant eventTime = Instant.parse("2026-08-28T12:10:00Z");
+
         assertThrows(IllegalArgumentException.class,
-                () -> TumblingWindow.startFor(Instant.parse("2026-08-28T12:10:00Z"), Duration.ZERO));
+                () -> TumblingWindow.startFor(eventTime, Duration.ZERO));
     }
 }

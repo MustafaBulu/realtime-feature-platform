@@ -27,12 +27,16 @@ class PlatformEventTest {
 
     @Test
     void rejectsBlankEventType() {
+        Instant eventTime = Instant.parse("2026-08-28T12:10:14.200Z");
+        EntityRef entity = new EntityRef("user", "u-1");
+        Map<String, Object> payload = Map.of();
+
         assertThrows(IllegalArgumentException.class, () -> new PlatformEvent(
                 "event-1",
                 " ",
-                Instant.parse("2026-08-28T12:10:14.200Z"),
-                new EntityRef("user", "u-1"),
-                Map.of()
+                eventTime,
+                entity,
+                payload
         ));
     }
 

@@ -20,8 +20,4 @@ record AggregationResult(
     FeatureValue featureValue() {
         return new FeatureValue(featureKey, value, updatedAt);
     }
-
-    boolean windowed() {
-        return windowStart != null;
-    }
 }

@@ -7,6 +7,7 @@ public final class BuiltInFeatureDefinitions {
 
     private static final String REQUEST_COMPLETED = "request.completed";
     private static final String SERVICE_ENTITY_TYPE = "service";
+    private static final String COUNT_FIELD = "count";
 
     private BuiltInFeatureDefinitions() {
     }
@@ -26,7 +27,7 @@ public final class BuiltInFeatureDefinitions {
                 REQUEST_COMPLETED,
                 SERVICE_ENTITY_TYPE,
                 AggregationType.SUM,
-                "count",
+                COUNT_FIELD,
                 null,
                 null,
                 WindowType.NONE,
@@ -61,7 +62,7 @@ public final class BuiltInFeatureDefinitions {
                 SERVICE_ENTITY_TYPE,
                 AggregationType.AVG,
                 "latencyMs",
-                "count",
+                COUNT_FIELD,
                 new FeatureFilter("latencyMs", FeatureFilterOperator.EXISTS, null),
                 WindowType.TUMBLING,
                 Duration.ofMinutes(5),
@@ -77,7 +78,7 @@ public final class BuiltInFeatureDefinitions {
                 REQUEST_COMPLETED,
                 SERVICE_ENTITY_TYPE,
                 AggregationType.RATIO,
-                "count",
+                COUNT_FIELD,
                 null,
                 new FeatureFilter("statusCode", FeatureFilterOperator.EXISTS, null),
                 new FeatureFilter("statusCode", FeatureFilterOperator.GTE, "500"),

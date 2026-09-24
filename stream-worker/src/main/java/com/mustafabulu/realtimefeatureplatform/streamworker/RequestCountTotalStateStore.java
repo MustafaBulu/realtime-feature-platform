@@ -15,36 +15,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
-class RequestCountTotalStateStore {
+class RequestCountTotalStateStore implements AutoCloseable {
 
     private final RocksDB database;
-    private final Options options;
 
     RequestCountTotalStateStore(@Value("${rfp.rocksdb.path}") Path databasePath) {
         RocksDB.loadLibrary();
-        this.options = new Options().setCreateIfMissing(true);
-        this.database = open(databasePath, options);
-    }
-
-    long add(String key, long increment) {
-        byte[] encodedKey = key.getBytes(StandardCharsets.UTF_8);
-        long previous = readLong(encodedKey);
-        long next = previous + increment;
-        writeLong(encodedKey, next);
-        return next;
-    }
-
-    boolean markIfAbsent(String key) {
-        byte[] encodedKey = key.getBytes(StandardCharsets.UTF_8);
-        try {
-            if (database.get(encodedKey) != null) {
-                return false;
-            }
-            database.put(encodedKey, "1".getBytes(StandardCharsets.UTF_8));
-            return true;
-        } catch (RocksDBException ex) {
-            throw new IllegalStateException("Could not update RocksDB marker", ex);
-        }
+        this.database = open(databasePath);
     }
 
     boolean markIfAbsent(String key, Instant expiresAt, Instant now) {
@@ -61,15 +38,14 @@ class RequestCountTotalStateStore {
         }
     }
 
-    int cleanupExpiredMarkers(String prefix, Instant now, int maxEntries) {
+    void cleanupExpiredMarkers(String prefix, Instant now, int maxEntries) {
         if (maxEntries <= 0) {
-            return 0;
+            return;
         }
 
         byte[] encodedPrefix = prefix.getBytes(StandardCharsets.UTF_8);
         List<byte[]> expiredKeys = new ArrayList<>();
-        RocksIterator iterator = database.newIterator();
-        try {
+        try (RocksIterator iterator = database.newIterator()) {
             for (iterator.seek(encodedPrefix);
                     iterator.isValid()
                             && startsWith(iterator.key(), encodedPrefix)
@@ -79,15 +55,12 @@ class RequestCountTotalStateStore {
                     expiredKeys.add(iterator.key().clone());
                 }
             }
-        } finally {
-            iterator.close();
         }
 
         try {
             for (byte[] expiredKey : expiredKeys) {
                 database.delete(expiredKey);
             }
-            return expiredKeys.size();
         } catch (RocksDBException ex) {
             throw new IllegalStateException("Could not cleanup expired RocksDB markers", ex);
         }
@@ -111,9 +84,15 @@ class RequestCountTotalStateStore {
     }
 
     @PreDestroy
-    void close() {
+    @Override
+    public void close() {
         database.close();
-        options.close();
+    }
+
+    private static RocksDB open(Path databasePath) {
+        try (Options options = new Options().setCreateIfMissing(true)) {
+            return open(databasePath, options);
+        }
     }
 
     private static RocksDB open(Path databasePath, Options options) {
@@ -122,23 +101,6 @@ class RequestCountTotalStateStore {
             return RocksDB.open(options, databasePath.toString());
         } catch (Exception ex) {
             throw new IllegalStateException("Could not open RocksDB at " + databasePath, ex);
-        }
-    }
-
-    private long readLong(byte[] key) {
-        try {
-            byte[] value = database.get(key);
-            return value == null ? 0L : Long.parseLong(new String(value, StandardCharsets.UTF_8));
-        } catch (RocksDBException ex) {
-            throw new IllegalStateException("Could not read RocksDB state", ex);
-        }
-    }
-
-    private void writeLong(byte[] key, long value) {
-        try {
-            database.put(key, Long.toString(value).getBytes(StandardCharsets.UTF_8));
-        } catch (RocksDBException ex) {
-            throw new IllegalStateException("Could not write RocksDB state", ex);
         }
     }
 

@@ -108,56 +108,75 @@ public record FeatureDefinition(
     }
 
     public FeatureDefinition {
-        Objects.requireNonNull(name, "name must not be null");
-        Objects.requireNonNull(eventType, "eventType must not be null");
-        Objects.requireNonNull(entityType, "entityType must not be null");
+        requireNonBlank(name, "name");
+        requireNonBlank(eventType, "eventType");
+        requireNonBlank(entityType, "entityType");
         Objects.requireNonNull(aggregationType, "aggregationType must not be null");
         Objects.requireNonNull(windowType, "windowType must not be null");
         Objects.requireNonNull(state, "state must not be null");
 
-        if (name.isBlank()) {
-            throw new IllegalArgumentException("name must not be blank");
-        }
-        if (eventType.isBlank()) {
-            throw new IllegalArgumentException("eventType must not be blank");
-        }
-        if (entityType.isBlank()) {
-            throw new IllegalArgumentException("entityType must not be blank");
-        }
         if (version < 1) {
             throw new IllegalArgumentException("version must be positive");
         }
 
-        if (requiresValueField(aggregationType)) {
-            FeatureDefinitionFields.requireValidFieldPath(valueField, "valueField");
-        } else if (valueField != null && !valueField.isBlank()) {
+        requireValidAggregationFields(aggregationType, valueField, weightField, numeratorFilter);
+        if (windowType == WindowType.NONE) {
+            requireUnwindowed(windowSize, slide);
+        } else {
+            slide = requireWindowed(windowType, windowSize, slide);
+        }
+    }
+
+    private static void requireNonBlank(String value, String fieldName) {
+        Objects.requireNonNull(value, fieldName + " must not be null");
+        if (value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+    }
+
+    private static void requireValidAggregationFields(
+            AggregationType aggregationType,
+            String valueField,
+            String weightField,
+            FeatureFilter numeratorFilter
+    ) {
+        if (requiresValueField(aggregationType) || hasText(valueField)) {
             FeatureDefinitionFields.requireValidFieldPath(valueField, "valueField");
         }
-        if (weightField != null && !weightField.isBlank()) {
+        if (hasText(weightField)) {
             FeatureDefinitionFields.requireValidFieldPath(weightField, "weightField");
         }
         if (aggregationType == AggregationType.RATIO && numeratorFilter == null) {
             throw new IllegalArgumentException("ratio definitions must define numeratorFilter");
         }
+    }
 
-        if (windowType == WindowType.NONE) {
-            if (windowSize != null || slide != null) {
-                throw new IllegalArgumentException("unwindowed definitions must not define windowSize or slide");
-            }
-        } else {
-            Objects.requireNonNull(windowSize, "windowSize must not be null");
-            if (windowSize.isZero() || windowSize.isNegative()) {
-                throw new IllegalArgumentException("windowSize must be positive");
-            }
-
-            slide = slide == null ? windowSize : slide;
-            if (slide.isZero() || slide.isNegative()) {
-                throw new IllegalArgumentException("slide must be positive");
-            }
-            if (windowType == WindowType.SLIDING && slide.compareTo(windowSize) > 0) {
-                throw new IllegalArgumentException("sliding window slide must not be larger than windowSize");
-            }
+    private static void requireUnwindowed(Duration windowSize, Duration slide) {
+        if (windowSize != null || slide != null) {
+            throw new IllegalArgumentException("unwindowed definitions must not define windowSize or slide");
         }
+    }
+
+    private static Duration requireWindowed(WindowType windowType, Duration windowSize, Duration slide) {
+        Objects.requireNonNull(windowSize, "windowSize must not be null");
+        requirePositive(windowSize, "windowSize");
+
+        Duration effectiveSlide = slide == null ? windowSize : slide;
+        requirePositive(effectiveSlide, "slide");
+        if (windowType == WindowType.SLIDING && effectiveSlide.compareTo(windowSize) > 0) {
+            throw new IllegalArgumentException("sliding window slide must not be larger than windowSize");
+        }
+        return effectiveSlide;
+    }
+
+    private static void requirePositive(Duration duration, String fieldName) {
+        if (duration.isZero() || duration.isNegative()) {
+            throw new IllegalArgumentException(fieldName + " must be positive");
+        }
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private static boolean requiresValueField(AggregationType aggregationType) {

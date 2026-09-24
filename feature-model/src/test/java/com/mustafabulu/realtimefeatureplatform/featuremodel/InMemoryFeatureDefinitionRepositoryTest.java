@@ -23,9 +23,9 @@ class InMemoryFeatureDefinitionRepositoryTest {
     void rejectsDuplicateNameAndVersion() {
         FeatureDefinition first = definition("request_count_total", FeatureDefinitionState.ACTIVE, 1);
         FeatureDefinition duplicate = definition("request_count_total", FeatureDefinitionState.DRAFT, 1);
+        List<FeatureDefinition> definitions = List.of(first, duplicate);
 
-        assertThrows(IllegalArgumentException.class, () ->
-                new InMemoryFeatureDefinitionRepository(List.of(first, duplicate)));
+        assertThrows(IllegalArgumentException.class, () -> new InMemoryFeatureDefinitionRepository(definitions));
     }
 
     @Test

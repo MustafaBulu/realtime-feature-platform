@@ -34,9 +34,11 @@ class RequestCountWorkloadProducer {
                         sample.statusCode(),
                         sample.latencyMs()
                 ))
-                .peek(eventValidator::validate)
-                .peek(event -> kafkaTemplate.send(eventsTopic, event.entity().id(), EventJsonCodec.toJson(event)))
                 .toList();
+        for (PlatformEvent event : events) {
+            eventValidator.validate(event);
+            kafkaTemplate.send(eventsTopic, event.entity().id(), EventJsonCodec.toJson(event));
+        }
 
         kafkaTemplate.flush();
         return events;

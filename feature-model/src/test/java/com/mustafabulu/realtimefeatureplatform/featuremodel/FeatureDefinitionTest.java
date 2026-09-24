@@ -1,6 +1,7 @@
 package com.mustafabulu.realtimefeatureplatform.featuremodel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.Duration;
@@ -116,6 +117,9 @@ class FeatureDefinitionTest {
 
     @Test
     void rejectsSlidingWindowSlideLargerThanWindowSize() {
+        Duration windowSize = Duration.ofMinutes(10);
+        Duration slide = Duration.ofMinutes(15);
+
         assertThrows(IllegalArgumentException.class, () -> new FeatureDefinition(
                 "request_count_10m",
                 "request.completed",
@@ -124,8 +128,8 @@ class FeatureDefinitionTest {
                 null,
                 null,
                 WindowType.SLIDING,
-                Duration.ofMinutes(10),
-                Duration.ofMinutes(15),
+                windowSize,
+                slide,
                 1,
                 FeatureDefinitionState.ACTIVE
         ));
@@ -157,6 +161,6 @@ class FeatureDefinitionTest {
 
         assertEquals("latencyMs", filter.field());
         assertEquals(FeatureFilterOperator.EXISTS, filter.operator());
-        assertEquals(null, filter.value());
+        assertNull(filter.value());
     }
 }

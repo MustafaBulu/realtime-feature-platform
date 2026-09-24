@@ -7,7 +7,7 @@ import java.util.regex.Pattern;
 
 public final class FeatureDurationParser {
 
-    private static final Pattern COMPACT_DURATION = Pattern.compile("([1-9][0-9]*)(ms|s|m|h|d)");
+    private static final Pattern COMPACT_DURATION = Pattern.compile("([1-9]\\d*)(ms|s|m|h|d)");
 
     private FeatureDurationParser() {
     }
