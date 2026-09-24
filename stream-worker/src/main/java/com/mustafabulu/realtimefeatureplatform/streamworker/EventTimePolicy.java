@@ -28,7 +28,20 @@ class EventTimePolicy {
     }
 
     boolean isTooLate(PlatformEvent event) {
-        Instant cutoff = Instant.now(clock).minus(allowedLateness);
-        return event.eventTime().isBefore(cutoff);
+        return assess(event).tooLate();
+    }
+
+    EventTimeAssessment assess(PlatformEvent event) {
+        Instant processingTime = Instant.now(clock);
+        Instant cutoff = processingTime.minus(allowedLateness);
+        EventTiming timing;
+        if (event.eventTime().isBefore(cutoff)) {
+            timing = EventTiming.TOO_LATE;
+        } else if (event.eventTime().isBefore(processingTime)) {
+            timing = EventTiming.LATE_WITHIN_ALLOWED;
+        } else {
+            timing = EventTiming.ON_TIME;
+        }
+        return new EventTimeAssessment(event.eventTime(), processingTime, cutoff, timing);
     }
 }

@@ -29,17 +29,22 @@ The project is intentionally scoped as a streaming infrastructure portfolio proj
 - Registry endpoints for definition save, activation, and deactivation
 - Worker feature-definition reload with last-successful snapshot fallback
 - Worker debug endpoint for active feature definitions
+- Generic `count`, `sum`, `avg`, `ratio`, and exact `distinct_count` aggregators
+- Adding standard features through registry metadata without adding Java processor classes
+- Event-time tumbling and sliding window aggregation
+- Redis latest-window aliases and window-specific reads
+- TTL-based expiration for materialized window-specific Redis keys
+- Processing-time and event-time classification for stream events
+- Allowed-lateness correction for historical window buckets
+- Arrival-order convergence tests for out-of-order events
+- Bounded partition-scoped deduplication with retention and cleanup
+- Single, subset, and batch feature serving reads
+- Serving response metadata for freshness, definition version, status, and Redis TTL
 
 ## Planned Platform Capabilities
 
-The current worker computes the prototype features through declarative feature definitions and the generic aggregation engine. The next implementation stages harden window correctness, event-time behavior, serving semantics, recovery, and benchmark evidence.
+The current worker computes the prototype features through declarative feature definitions and the generic aggregation engine. The next implementation stages harden recovery and benchmark evidence.
 
-- Adding standard features without adding Java processor classes
-- Generic `count`, `sum`, `avg`, and exact `distinct_count` aggregators
-- Tumbling and sliding windows driven by event time
-- Bounded deduplication with retention and cleanup
-- Late-event correction inside allowed lateness
-- Batch serving, freshness metadata, and definition-version metadata
 - Worker restart and Kafka rebalance recovery semantics
 - PostgreSQL on-demand benchmark baseline
 
@@ -132,6 +137,24 @@ GET http://localhost:8081/internal/feature-definitions
 
 The endpoint exposes the active definitions loaded by the worker. When `rfp.feature-registry.store=postgres`, the worker polls the PostgreSQL registry and keeps using the last successful definition snapshot if a later reload fails.
 
+Windowed features are materialized twice:
+
+- The feature key without `windowStart` stores the latest open window value.
+- The window-specific key stores the value for the requested `windowStart` and gets a Redis TTL.
+
+Allowed-lateness behavior:
+
+- Events older than the configured allowed-lateness cutoff are rejected.
+- Late events inside the allowed-lateness window update their historical window-specific bucket.
+- Historical corrections do not move the latest-window alias back to an older window.
+
+Deduplication behavior:
+
+- Event IDs are remembered in RocksDB before feature updates.
+- Dedup marker keys include the Kafka topic-partition namespace.
+- Markers expire after `rfp.dedup.retention`.
+- Expired markers are cleaned in bounded batches controlled by `rfp.dedup.cleanup-interval` and `rfp.dedup.cleanup-batch-size`.
+
 Feature registry endpoints:
 
 ```text
@@ -140,6 +163,18 @@ POST http://localhost:8080/registry/definitions
 POST http://localhost:8080/registry/definitions/{name}/versions/{version}/activate
 POST http://localhost:8080/registry/definitions/{name}/versions/{version}/deactivate
 ```
+
+Feature serving endpoints:
+
+```text
+GET  http://localhost:8080/features/{entityType}/{entityId}/{featureName}
+GET  http://localhost:8080/features/{entityType}/{entityId}?featureNames=request_count_total&featureNames=entity_event_count_10m
+POST http://localhost:8080/features/batch
+```
+
+Serving responses include `metadata.status`, `metadata.updatedAt`, `metadata.freshnessMillis`,
+`metadata.definitionVersion`, and `metadata.ttlSeconds`. Status values distinguish `PRESENT`,
+`MISSING`, `STALE`, and `UNAVAILABLE`; a materialized zero value remains `PRESENT`.
 
 ## Happy Path
 
@@ -159,14 +194,22 @@ Read the materialized feature:
 GET http://localhost:8080/features/service/catalog-api/request_count_total
 ```
 
-Expected response value:
+Example response shape:
 
 ```json
 {
   "entityType": "service",
   "entityId": "catalog-api",
   "featureName": "request_count_total",
-  "value": 450
+  "windowStart": null,
+  "value": 450,
+  "metadata": {
+    "status": "PRESENT",
+    "updatedAt": "2026-08-28T12:10:14.200Z",
+    "freshnessMillis": 250,
+    "definitionVersion": 1,
+    "ttlSeconds": null
+  }
 }
 ```
 
@@ -176,7 +219,7 @@ Read the latest 10-minute entity event-count feature:
 GET http://localhost:8080/features/service/catalog-api/entity_event_count_10m
 ```
 
-Expected response value:
+Expected `value` field:
 
 ```json
 {
@@ -199,7 +242,7 @@ Read the latest 10-minute entity error-rate feature:
 GET http://localhost:8080/features/service/catalog-api/entity_error_rate_10m
 ```
 
-Expected response value:
+Expected `value` field:
 
 ```json
 {
@@ -216,7 +259,7 @@ Read the latest 5-minute average-latency feature:
 GET http://localhost:8080/features/service/catalog-api/entity_avg_latency_ms_5m
 ```
 
-Expected response value:
+Expected `value` field:
 
 ```json
 {
@@ -238,9 +281,11 @@ The prototype currently materializes these features for the `request.completed` 
 | `entity_error_rate_10m` | Generic derived ratio | Computes `server_error_count / request_count` over payload `count` in a 10-minute tumbling event-time window. Server errors are `statusCode >= 500`. |
 | `entity_avg_latency_ms_5m` | Generic engine | Computes weighted average latency as `sum(latencyMs * count) / sum(count)` in a 5-minute tumbling event-time window. |
 
-Input validation, duplicate detection, and too-late discard happen before feature updates. Duplicate events are identified by `eventId`. Too-late events are discarded when `eventTime` is older than the configured allowed-lateness cutoff.
+Input validation, duplicate detection, and too-late discard happen before feature updates. Duplicate events are identified by `eventId`. Too-late events are discarded when `eventTime` is older than the configured allowed-lateness cutoff. Out-of-order events inside the allowed-lateness window are accepted as corrections.
 
 The in-memory registry currently seeds metadata for `request_count_total`, `entity_event_count_10m`, `entity_error_rate_10m`, and `entity_avg_latency_ms_5m`.
+
+Sliding windows use the feature definition `slide` as the bucket granularity. Each accepted event updates every aligned sliding window that contains its event time; the latest alias is updated only from the newest open sliding window.
 
 ## Roadmap
 
@@ -249,7 +294,6 @@ The platform will grow toward:
 - Kafka-backed event ingestion
 - Entity-key partitioning
 - Event-time windowing
-- Tumbling and sliding windows
 - RocksDB local state
 - Redis feature materialization
 - Worker restart and Kafka rebalance recovery

@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -34,7 +35,10 @@ class RequestCountTotalConsumerTest {
 
     @BeforeEach
     void setUp() {
-        org.mockito.Mockito.when(processedEventStore.markIfFirst(org.mockito.Mockito.any())).thenReturn(true);
+        org.mockito.Mockito.when(processedEventStore.markIfFirst(
+                org.mockito.Mockito.any(),
+                org.mockito.Mockito.anyString()
+        )).thenReturn(true);
     }
 
     @Test
@@ -50,16 +54,38 @@ class RequestCountTotalConsumerTest {
 
         consumer.consume(payload);
 
-        verify(processor).process(org.mockito.Mockito.any());
+        verify(processor).process(
+                org.mockito.Mockito.any(),
+                org.mockito.Mockito.any(EventTimeAssessment.class)
+        );
         assertEquals(0.0, meterRegistry.counter("rfp.worker.events.invalid").count());
         assertEquals(1.0, meterRegistry.counter("rfp.worker.events.processed").count());
+    }
+
+    @Test
+    void usesKafkaPartitionNamespaceForDedupKey() {
+        org.mockito.Mockito.when(processor.supports(org.mockito.Mockito.any())).thenReturn(true);
+        String payload = EventJsonCodec.toJson(RequestCompletedEventFactory.create(
+                "event-1",
+                "service",
+                "catalog-api",
+                100,
+                Instant.parse("2026-08-28T12:10:14.200Z")
+        ));
+
+        consumer.consume(new ConsumerRecord<>("platform.events", 3, 42L, "catalog-api", payload));
+
+        verify(processedEventStore).markIfFirst(org.mockito.Mockito.any(), org.mockito.Mockito.eq("platform.events-3"));
     }
 
     @Test
     void discardsMalformedEventWithoutCallingProcessor() {
         consumer.consume("{\"eventId\":\"event-1\",\"eventType\":\"request.completed\"}");
 
-        verify(processor, never()).process(org.mockito.Mockito.any());
+        verify(processor, never()).process(
+                org.mockito.Mockito.any(),
+                org.mockito.Mockito.any(EventTimeAssessment.class)
+        );
         assertEquals(1.0, meterRegistry.counter("rfp.worker.events.invalid").count());
     }
 
@@ -75,7 +101,10 @@ class RequestCountTotalConsumerTest {
                 }
                 """);
 
-        verify(processor, never()).process(org.mockito.Mockito.any());
+        verify(processor, never()).process(
+                org.mockito.Mockito.any(),
+                org.mockito.Mockito.any(EventTimeAssessment.class)
+        );
         assertEquals(1.0, meterRegistry.counter("rfp.worker.events.invalid").count());
     }
 
@@ -93,13 +122,19 @@ class RequestCountTotalConsumerTest {
                 }
                 """);
 
-        verify(processor, never()).process(org.mockito.Mockito.any());
+        verify(processor, never()).process(
+                org.mockito.Mockito.any(),
+                org.mockito.Mockito.any(EventTimeAssessment.class)
+        );
         assertEquals(1.0, meterRegistry.counter("rfp.worker.events.ignored").count());
     }
 
     @Test
     void discardsDuplicateEventWithoutCallingProcessor() {
-        org.mockito.Mockito.when(processedEventStore.markIfFirst(org.mockito.Mockito.any())).thenReturn(false);
+        org.mockito.Mockito.when(processedEventStore.markIfFirst(
+                org.mockito.Mockito.any(),
+                org.mockito.Mockito.anyString()
+        )).thenReturn(false);
         String payload = EventJsonCodec.toJson(RequestCompletedEventFactory.create(
                 "event-1",
                 "service",
@@ -110,7 +145,10 @@ class RequestCountTotalConsumerTest {
 
         consumer.consume(payload);
 
-        verify(processor, never()).process(org.mockito.Mockito.any());
+        verify(processor, never()).process(
+                org.mockito.Mockito.any(),
+                org.mockito.Mockito.any(EventTimeAssessment.class)
+        );
         assertEquals(1.0, meterRegistry.counter("rfp.worker.events.duplicate").count());
     }
 
@@ -126,8 +164,14 @@ class RequestCountTotalConsumerTest {
 
         consumer.consume(payload);
 
-        verify(processedEventStore, never()).markIfFirst(org.mockito.Mockito.any());
-        verify(processor, never()).process(org.mockito.Mockito.any());
+        verify(processedEventStore, never()).markIfFirst(
+                org.mockito.Mockito.any(),
+                org.mockito.Mockito.anyString()
+        );
+        verify(processor, never()).process(
+                org.mockito.Mockito.any(),
+                org.mockito.Mockito.any(EventTimeAssessment.class)
+        );
         assertEquals(1.0, meterRegistry.counter("rfp.worker.events.late").count());
     }
 }

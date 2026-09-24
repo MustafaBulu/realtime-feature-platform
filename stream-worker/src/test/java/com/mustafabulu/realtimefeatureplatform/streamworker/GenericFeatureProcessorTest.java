@@ -52,7 +52,11 @@ class GenericFeatureProcessorTest {
         assertEquals(100L, processor.process(event).value());
 
         verify(valueOperations).set(totalKey, "100");
+        verify(valueOperations).set(totalKey + ":updated-at", "2026-08-28T12:14:59.999Z");
+        verify(valueOperations).set(totalKey + ":definition-version", "1");
         verify(valueOperations).set(eventCountWindowKey, "1");
+        verify(valueOperations).set(eventCountWindowKey + ":updated-at", "2026-08-28T12:14:59.999Z");
+        verify(valueOperations).set(eventCountWindowKey + ":definition-version", "1");
         verify(valueOperations).set(eventCountKey, "1");
         verify(valueOperations).set(avgLatencyWindowKey, "80.0");
         verify(valueOperations).set(avgLatencyKey, "80.0");

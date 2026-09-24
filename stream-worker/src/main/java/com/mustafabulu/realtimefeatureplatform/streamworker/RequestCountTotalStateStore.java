@@ -4,9 +4,13 @@ import jakarta.annotation.PreDestroy;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
+import org.rocksdb.RocksIterator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -40,6 +44,52 @@ class RequestCountTotalStateStore {
             return true;
         } catch (RocksDBException ex) {
             throw new IllegalStateException("Could not update RocksDB marker", ex);
+        }
+    }
+
+    boolean markIfAbsent(String key, Instant expiresAt, Instant now) {
+        byte[] encodedKey = key.getBytes(StandardCharsets.UTF_8);
+        try {
+            byte[] existing = database.get(encodedKey);
+            if (existing != null && !isExpired(existing, now)) {
+                return false;
+            }
+            database.put(encodedKey, Long.toString(expiresAt.toEpochMilli()).getBytes(StandardCharsets.UTF_8));
+            return true;
+        } catch (RocksDBException ex) {
+            throw new IllegalStateException("Could not update RocksDB marker", ex);
+        }
+    }
+
+    int cleanupExpiredMarkers(String prefix, Instant now, int maxEntries) {
+        if (maxEntries <= 0) {
+            return 0;
+        }
+
+        byte[] encodedPrefix = prefix.getBytes(StandardCharsets.UTF_8);
+        List<byte[]> expiredKeys = new ArrayList<>();
+        RocksIterator iterator = database.newIterator();
+        try {
+            for (iterator.seek(encodedPrefix);
+                    iterator.isValid()
+                            && startsWith(iterator.key(), encodedPrefix)
+                            && expiredKeys.size() < maxEntries;
+                    iterator.next()) {
+                if (isExpired(iterator.value(), now)) {
+                    expiredKeys.add(iterator.key().clone());
+                }
+            }
+        } finally {
+            iterator.close();
+        }
+
+        try {
+            for (byte[] expiredKey : expiredKeys) {
+                database.delete(expiredKey);
+            }
+            return expiredKeys.size();
+        } catch (RocksDBException ex) {
+            throw new IllegalStateException("Could not cleanup expired RocksDB markers", ex);
         }
     }
 
@@ -90,5 +140,25 @@ class RequestCountTotalStateStore {
         } catch (RocksDBException ex) {
             throw new IllegalStateException("Could not write RocksDB state", ex);
         }
+    }
+
+    private static boolean isExpired(byte[] value, Instant now) {
+        try {
+            return Long.parseLong(new String(value, StandardCharsets.UTF_8)) <= now.toEpochMilli();
+        } catch (NumberFormatException ex) {
+            return true;
+        }
+    }
+
+    private static boolean startsWith(byte[] value, byte[] prefix) {
+        if (value.length < prefix.length) {
+            return false;
+        }
+        for (int index = 0; index < prefix.length; index++) {
+            if (value[index] != prefix[index]) {
+                return false;
+            }
+        }
+        return true;
     }
 }

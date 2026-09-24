@@ -5,6 +5,7 @@ import com.mustafabulu.realtimefeatureplatform.eventmodel.EventValidationExcepti
 import com.mustafabulu.realtimefeatureplatform.eventmodel.EventValidator;
 import com.mustafabulu.realtimefeatureplatform.eventmodel.PlatformEvent;
 import java.util.List;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -34,26 +35,38 @@ class RequestCountTotalConsumer {
     }
 
     @KafkaListener(topics = "${rfp.kafka.events-topic}")
+    void consume(ConsumerRecord<String, String> record) {
+        consume(record.value(), record.topic() + "-" + record.partition());
+    }
+
     void consume(String eventPayload) {
+        consume(eventPayload, "unknown");
+    }
+
+    private void consume(String eventPayload, String partitionNamespace) {
         try {
             PlatformEvent event = EventJsonCodec.fromJson(eventPayload);
             eventValidator.validate(event);
 
-            if (eventTimePolicy.isTooLate(event)) {
+            EventTimeAssessment assessment = eventTimePolicy.assess(event);
+            if (assessment.tooLate()) {
                 metrics.recordLate();
                 LOGGER.warn("Discarded late platform event: eventId={}", event.eventId());
                 return;
             }
-            if (!processedEventStore.markIfFirst(event)) {
+            if (!processedEventStore.markIfFirst(event, partitionNamespace)) {
                 metrics.recordDuplicate();
                 LOGGER.warn("Discarded duplicate platform event: eventId={}", event.eventId());
                 return;
+            }
+            if (assessment.lateWithinAllowed()) {
+                metrics.recordAcceptedLate();
             }
 
             boolean handled = false;
             for (PlatformEventProcessor processor : processors) {
                 if (processor.supports(event)) {
-                    processor.process(event);
+                    processor.process(event, assessment);
                     handled = true;
                 }
             }

@@ -12,6 +12,8 @@ class StreamWorkerEventMetrics {
     private final Counter ignoredEvents;
     private final Counter duplicateEvents;
     private final Counter lateEvents;
+    private final Counter acceptedLateEvents;
+    private final Counter rejectedLateEvents;
 
     StreamWorkerEventMetrics(MeterRegistry meterRegistry) {
         this.processedEvents = Counter.builder("rfp.worker.events.processed")
@@ -28,6 +30,12 @@ class StreamWorkerEventMetrics {
                 .register(meterRegistry);
         this.lateEvents = Counter.builder("rfp.worker.events.late")
                 .description("Events discarded because their eventTime is outside the allowed lateness")
+                .register(meterRegistry);
+        this.acceptedLateEvents = Counter.builder("rfp.worker.events.late.accepted")
+                .description("Late events accepted inside the allowed lateness correction window")
+                .register(meterRegistry);
+        this.rejectedLateEvents = Counter.builder("rfp.worker.events.late.rejected")
+                .description("Late events rejected because their eventTime is outside the allowed lateness")
                 .register(meterRegistry);
     }
 
@@ -49,5 +57,10 @@ class StreamWorkerEventMetrics {
 
     void recordLate() {
         lateEvents.increment();
+        rejectedLateEvents.increment();
+    }
+
+    void recordAcceptedLate() {
+        acceptedLateEvents.increment();
     }
 }

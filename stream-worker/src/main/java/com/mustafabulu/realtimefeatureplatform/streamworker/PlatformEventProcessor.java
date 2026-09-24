@@ -8,4 +8,8 @@ interface PlatformEventProcessor {
     boolean supports(PlatformEvent event);
 
     FeatureValue process(PlatformEvent event);
+
+    default FeatureValue process(PlatformEvent event, EventTimeAssessment assessment) {
+        return process(event);
+    }
 }
