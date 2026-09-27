@@ -1,0 +1,46 @@
+{
+  "uid": "rfp-overview",
+  "title": "RFP Overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Ingestion throughput",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "Prometheus"}, "expr": "rate(rfp_worker_events_received_total[5m])", "legendFormat": "received/s"},
+        {"datasource": {"type": "prometheus", "uid": "Prometheus"}, "expr": "rate(rfp_worker_events_processed_total[5m])", "legendFormat": "processed/s"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Serving latency",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "Prometheus"}, "expr": "rfp_feature_api_serving_latency_seconds{quantile=\"0.5\"}", "legendFormat": "p50"},
+        {"datasource": {"type": "prometheus", "uid": "Prometheus"}, "expr": "rfp_feature_api_serving_latency_seconds{quantile=\"0.95\"}", "legendFormat": "p95"},
+        {"datasource": {"type": "prometheus", "uid": "Prometheus"}, "expr": "rfp_feature_api_serving_latency_seconds{quantile=\"0.99\"}", "legendFormat": "p99"}
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "RocksDB state size",
+      "gridPos": {"x": 0, "y": 8, "w": 8, "h": 6},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "Prometheus"}, "expr": "rfp_worker_rocksdb_state_size_bytes", "legendFormat": "bytes"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Ingestion lag",
+      "gridPos": {"x": 8, "y": 8, "w": 16, "h": 6},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "Prometheus"}, "expr": "rfp_worker_ingestion_lag_millis{quantile=\"0.5\"}", "legendFormat": "p50"},
+        {"datasource": {"type": "prometheus", "uid": "Prometheus"}, "expr": "rfp_worker_ingestion_lag_millis{quantile=\"0.95\"}", "legendFormat": "p95"},
+        {"datasource": {"type": "prometheus", "uid": "Prometheus"}, "expr": "rfp_worker_ingestion_lag_millis{quantile=\"0.99\"}", "legendFormat": "p99"}
+      ]
+    }
+  ]
+}

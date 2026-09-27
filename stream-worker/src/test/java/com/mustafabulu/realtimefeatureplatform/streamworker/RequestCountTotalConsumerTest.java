@@ -20,11 +20,13 @@ import java.util.List;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.kafka.support.Acknowledgment;
 
 class RequestCountTotalConsumerTest {
 
     private final PlatformEventProcessor processor = mock(PlatformEventProcessor.class);
     private final ProcessedEventStore processedEventStore = mock(ProcessedEventStore.class);
+    private final CheckpointManager checkpointManager = mock(CheckpointManager.class);
     private final EventTimePolicy eventTimePolicy = new EventTimePolicy(
             Clock.fixed(Instant.parse("2026-08-28T12:20:00Z"), ZoneOffset.UTC),
             Duration.ofMinutes(10)
@@ -35,7 +37,8 @@ class RequestCountTotalConsumerTest {
             List.of(processor),
             processedEventStore,
             eventTimePolicy,
-            metrics
+            metrics,
+            checkpointManager
     );
 
     @BeforeEach
@@ -78,6 +81,30 @@ class RequestCountTotalConsumerTest {
         consumer.consume(new ConsumerRecord<>("platform.events", 3, 42L, "catalog-api", payload));
 
         verify(processedEventStore).markIfFirst(any(), eq("platform.events-3"));
+    }
+
+    @Test
+    void checkpointsAndAcknowledgesTerminalKafkaRecord() {
+        when(processor.supports(any())).thenReturn(true);
+        Acknowledgment acknowledgment = mock(Acknowledgment.class);
+        ConsumerRecord<String, String> record = new ConsumerRecord<>(
+                "platform.events",
+                3,
+                42L,
+                "catalog-api",
+                EventJsonCodec.toJson(RequestCompletedEventFactory.create(
+                        "event-1",
+                        "service",
+                        "catalog-api",
+                        100,
+                        Instant.parse("2026-08-28T12:10:14.200Z")
+                ))
+        );
+
+        consumer.consume(record, acknowledgment);
+
+        verify(checkpointManager).markSafe(record);
+        verify(acknowledgment).acknowledge();
     }
 
     @Test

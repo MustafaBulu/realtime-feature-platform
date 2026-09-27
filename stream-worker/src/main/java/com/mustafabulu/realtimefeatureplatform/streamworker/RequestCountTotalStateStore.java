@@ -6,7 +6,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import org.rocksdb.FlushOptions;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
@@ -83,6 +87,43 @@ class RequestCountTotalStateStore implements AutoCloseable {
         }
     }
 
+    List<StateEntry> entriesWithPrefix(String prefix) {
+        byte[] encodedPrefix = prefix.getBytes(StandardCharsets.UTF_8);
+        Map<String, String> entries = new TreeMap<>(Comparator.naturalOrder());
+        try (RocksIterator iterator = database.newIterator()) {
+            for (iterator.seek(encodedPrefix);
+                    iterator.isValid() && startsWith(iterator.key(), encodedPrefix);
+                    iterator.next()) {
+                entries.put(
+                        new String(iterator.key(), StandardCharsets.UTF_8),
+                        new String(iterator.value(), StandardCharsets.UTF_8)
+                );
+            }
+        }
+        return entries.entrySet().stream()
+                .map(entry -> new StateEntry(entry.getKey(), entry.getValue()))
+                .toList();
+    }
+
+    void flush() {
+        try (FlushOptions options = new FlushOptions().setWaitForFlush(true)) {
+            database.flush(options);
+        } catch (RocksDBException ex) {
+            throw new IllegalStateException("Could not flush RocksDB state", ex);
+        }
+    }
+
+    long estimatedStateSizeBytes() {
+        long size = 0L;
+        try (RocksIterator iterator = database.newIterator()) {
+            for (iterator.seekToFirst(); iterator.isValid(); iterator.next()) {
+                size += iterator.key().length;
+                size += iterator.value().length;
+            }
+        }
+        return size;
+    }
+
     @PreDestroy
     @Override
     public void close() {
@@ -122,5 +163,8 @@ class RequestCountTotalStateStore implements AutoCloseable {
             }
         }
         return true;
+    }
+
+    record StateEntry(String key, String value) {
     }
 }

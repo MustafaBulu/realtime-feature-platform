@@ -20,7 +20,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.kafka.KafkaContainer;
+import org.testcontainers.kafka.ConfluentKafkaContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
@@ -32,8 +32,8 @@ import tools.jackson.databind.ObjectMapper;
 class RequestCountTotalE2ETest {
 
     @Container
-    static final KafkaContainer KAFKA = new KafkaContainer(
-            DockerImageName.parse("apache/kafka-native:3.9.0")
+    static final ConfluentKafkaContainer KAFKA = new ConfluentKafkaContainer(
+            DockerImageName.parse("confluentinc/cp-kafka:7.4.0")
     );
 
     @Container
@@ -71,37 +71,40 @@ class RequestCountTotalE2ETest {
 
     private ConfigurableApplicationContext startWorker(Path tempDir, String consumerGroup) {
         return new SpringApplicationBuilder(StreamWorkerApplication.class)
-                .properties(commonProperties())
-                .properties(
+                .run(args(
                         "server.port=0",
                         "spring.kafka.consumer.group-id=" + consumerGroup,
                         "rfp.rocksdb.path=" + tempDir.resolve("rocksdb")
-                )
-                .run();
+                ));
     }
 
     private ConfigurableApplicationContext startApi() {
         return new SpringApplicationBuilder(FeatureApiApplication.class)
-                .properties(commonProperties())
-                .properties("server.port=0")
-                .run();
+                .run(args("server.port=0"));
     }
 
     private ConfigurableApplicationContext startGenerator() {
         return new SpringApplicationBuilder(WorkloadGeneratorApplication.class)
-                .properties(commonProperties())
-                .properties("server.port=0")
-                .run();
+                .run(args("server.port=0"));
     }
 
-    private String[] commonProperties() {
-        return new String[]{
+    private String[] args(String... properties) {
+        String[] commonProperties = new String[]{
                 "spring.main.banner-mode=off",
                 "spring.kafka.bootstrap-servers=" + KAFKA.getBootstrapServers(),
+                "spring.kafka.consumer.auto-offset-reset=earliest",
                 "spring.data.redis.host=" + REDIS.getHost(),
                 "spring.data.redis.port=" + REDIS.getMappedPort(6379),
                 "rfp.kafka.events-topic=platform.events"
         };
+        String[] args = new String[commonProperties.length + properties.length];
+        for (int index = 0; index < commonProperties.length; index++) {
+            args[index] = "--" + commonProperties[index];
+        }
+        for (int index = 0; index < properties.length; index++) {
+            args[commonProperties.length + index] = "--" + properties[index];
+        }
+        return args;
     }
 
     private int port(ConfigurableApplicationContext context) {

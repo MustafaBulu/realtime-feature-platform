@@ -4,11 +4,14 @@ import com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureDefinition;
 import com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureDefinitionRepository;
 import com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureKey;
 import com.mustafabulu.realtimefeatureplatform.featuremodel.WindowedFeatureKey;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -28,6 +31,8 @@ class FeatureController {
     private final MeterRegistry meterRegistry;
     private final Clock clock;
     private final Duration staleAfter;
+    private final Timer servingLatency;
+    private final DistributionSummary freshnessMillis;
 
     @Autowired
     FeatureController(
@@ -51,6 +56,15 @@ class FeatureController {
         this.meterRegistry = meterRegistry;
         this.clock = clock;
         this.staleAfter = staleAfter;
+        this.servingLatency = Timer.builder("rfp.feature_api.serving.latency")
+                .description("Feature serving endpoint latency")
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(meterRegistry);
+        this.freshnessMillis = DistributionSummary.builder("rfp.feature_api.freshness.millis")
+                .description("Freshness of materialized feature values in milliseconds")
+                .baseUnit("milliseconds")
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(meterRegistry);
     }
 
     @GetMapping("/features/{entityType}/{entityId}/{featureName}")
@@ -60,7 +74,7 @@ class FeatureController {
             @PathVariable String featureName,
             @RequestParam(required = false) Instant windowStart
     ) {
-        return ResponseEntity.ok(readFeature(entityType, entityId, featureName, windowStart));
+        return timed(() -> ResponseEntity.ok(readFeature(entityType, entityId, featureName, windowStart)));
     }
 
     @GetMapping("/features/{entityType}/{entityId}")
@@ -69,23 +83,27 @@ class FeatureController {
             @PathVariable String entityId,
             @RequestParam List<String> featureNames
     ) {
-        List<FeatureReadResponse> features = featureNames.stream()
-                .map(featureName -> readFeature(entityType, entityId, featureName, null))
-                .toList();
-        return ResponseEntity.ok(new FeatureSetResponse(entityType, entityId, features));
+        return timed(() -> {
+            List<FeatureReadResponse> features = featureNames.stream()
+                    .map(featureName -> readFeature(entityType, entityId, featureName, null))
+                    .toList();
+            return ResponseEntity.ok(new FeatureSetResponse(entityType, entityId, features));
+        });
     }
 
     @PostMapping("/features/batch")
     ResponseEntity<BatchFeatureResponse> getFeatureBatch(@RequestBody BatchFeatureRequest request) {
-        List<FeatureReadResponse> features = request.features().stream()
-                .map(feature -> readFeature(
-                        feature.entityType(),
-                        feature.entityId(),
-                        feature.featureName(),
-                        feature.windowStart()
-                ))
-                .toList();
-        return ResponseEntity.ok(new BatchFeatureResponse(features));
+        return timed(() -> {
+            List<FeatureReadResponse> features = request.features().stream()
+                    .map(feature -> readFeature(
+                            feature.entityType(),
+                            feature.entityId(),
+                            feature.featureName(),
+                            feature.windowStart()
+                    ))
+                    .toList();
+            return ResponseEntity.ok(new BatchFeatureResponse(features));
+        });
     }
 
     private FeatureReadResponse readFeature(
@@ -108,6 +126,8 @@ class FeatureController {
                     ? FeatureReadStatus.MISSING
                     : statusFor(updatedAt);
             recordRedisRead(status);
+            Long freshness = freshnessMillis(updatedAt);
+            recordFreshness(freshness);
             return new FeatureReadResponse(
                     entityType,
                     entityId,
@@ -117,7 +137,7 @@ class FeatureController {
                     new FeatureMetadata(
                             status,
                             updatedAt,
-                            freshnessMillis(updatedAt),
+                            freshness,
                             definitionVersion,
                             ttlSeconds
                     )
@@ -174,6 +194,16 @@ class FeatureController {
 
     private void recordRedisRead(FeatureReadStatus status) {
         meterRegistry.counter("rfp.feature_api.redis.reads", "status", status.name().toLowerCase()).increment();
+    }
+
+    private void recordFreshness(Long value) {
+        if (value != null) {
+            freshnessMillis.record(Math.max(0.0, value));
+        }
+    }
+
+    private <T> T timed(Supplier<T> supplier) {
+        return servingLatency.record(supplier);
     }
 
     private static Instant parseInstant(String value) {

@@ -24,7 +24,8 @@ class GenericFeatureProcessorTest {
     private final StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
     @SuppressWarnings("unchecked")
     private final ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
-    private final GenericFeatureProcessor processor = new GenericFeatureProcessor(engine(), redisTemplate);
+    private final GenericFeatureProcessor processor =
+            new GenericFeatureProcessor(engine(), new FeatureRedisMaterializer(redisTemplate));
 
     @BeforeEach
     void setUp() {

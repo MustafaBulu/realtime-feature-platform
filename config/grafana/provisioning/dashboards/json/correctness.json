@@ -1,0 +1,45 @@
+{
+  "uid": "rfp-correctness",
+  "title": "RFP Correctness",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Rejected events",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "Prometheus"}, "expr": "rate(rfp_worker_events_invalid_total[5m])", "legendFormat": "invalid/s"},
+        {"datasource": {"type": "prometheus", "uid": "Prometheus"}, "expr": "rate(rfp_worker_events_duplicate_total[5m])", "legendFormat": "duplicate/s"},
+        {"datasource": {"type": "prometheus", "uid": "Prometheus"}, "expr": "rate(rfp_worker_events_late_rejected_total[5m])", "legendFormat": "too late/s"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Late corrections",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "Prometheus"}, "expr": "rate(rfp_worker_events_late_accepted_total[5m])", "legendFormat": "accepted late/s"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Feature freshness",
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "Prometheus"}, "expr": "rfp_feature_api_freshness_millis{quantile=\"0.5\"}", "legendFormat": "p50"},
+        {"datasource": {"type": "prometheus", "uid": "Prometheus"}, "expr": "rfp_feature_api_freshness_millis{quantile=\"0.95\"}", "legendFormat": "p95"},
+        {"datasource": {"type": "prometheus", "uid": "Prometheus"}, "expr": "rfp_feature_api_freshness_millis{quantile=\"0.99\"}", "legendFormat": "p99"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Serving read status",
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "Prometheus"}, "expr": "rate(rfp_feature_api_redis_reads_total[5m])", "legendFormat": "{{status}}/s"}
+      ]
+    }
+  ]
+}
