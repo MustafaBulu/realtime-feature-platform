@@ -131,8 +131,14 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/realtime_features
+      SPRING_DATASOURCE_USERNAME: realtime
+      SPRING_DATASOURCE_PASSWORD: realtime
+      RFP_FEATURE_API_BASE_URL: http://feature-api:8080
     depends_on:
       kafka:
+        condition: service_healthy
+      feature-api:
         condition: service_healthy
       postgres:
         condition: service_healthy

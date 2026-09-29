@@ -40,13 +40,21 @@ The project is intentionally scoped as a streaming infrastructure portfolio proj
 - Bounded partition-scoped deduplication with retention and cleanup
 - Single, subset, and batch feature serving reads
 - Serving response metadata for freshness, definition version, status, and Redis TTL
+- Worker restart restore path with deterministic Redis republish
+- Kafka rebalance assignment/revoke lifecycle handling
+- Worker recovery readiness health indicator
+- Worker ingestion lag, throughput, RocksDB size, restore duration, freshness, and serving latency metrics
+- Grafana overview, correctness, and recovery dashboards
+- PostgreSQL historical event storage for benchmark runs
+- Configurable benchmark workload with event rate, read rate, entity cardinality, uniform/Zipf distributions, warm-up, measurement, raw result export, and SQL baseline report
 
 ## Planned Platform Capabilities
 
-The current worker computes the prototype features through declarative feature definitions and the generic aggregation engine. The next implementation stages harden recovery and benchmark evidence.
+The current worker computes the prototype features through declarative feature definitions and the generic aggregation engine. Further work should focus on broad scale validation and production hardening.
 
-- Worker restart and Kafka rebalance recovery semantics
-- PostgreSQL on-demand benchmark baseline
+- Multi-node benchmark campaigns with published result artifacts
+- Operational runbooks and alert thresholds
+- Approximate high-cardinality distinct-count support
 
 ## Modules
 
@@ -57,7 +65,17 @@ The current worker computes the prototype features through declarative feature d
 | `feature-registry` | PostgreSQL feature registry repository and migration |
 | `feature-api` | Online feature serving API skeleton |
 | `stream-worker` | Stream processing worker skeleton |
-| `workload-generator` | Synthetic event generator skeleton |
+| `workload-generator` | Synthetic event generator and benchmark runner |
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Feature DSL](docs/feature-dsl.md)
+- [Event-time semantics](docs/event-time-semantics.md)
+- [Dedup semantics](docs/dedup-semantics.md)
+- [Recovery and rebalance](docs/recovery-rebalance.md)
+- [Benchmark methodology](docs/benchmark-methodology.md)
+- [Known limitations](docs/known-limitations.md)
 
 ## Requirements
 
@@ -175,6 +193,31 @@ POST http://localhost:8080/features/batch
 Serving responses include `metadata.status`, `metadata.updatedAt`, `metadata.freshnessMillis`,
 `metadata.definitionVersion`, and `metadata.ttlSeconds`. Status values distinguish `PRESENT`,
 `MISSING`, `STALE`, and `UNAVAILABLE`; a materialized zero value remains `PRESENT`.
+
+Benchmark endpoint:
+
+```text
+POST http://localhost:8082/benchmarks/request-count
+```
+
+Example benchmark request:
+
+```json
+{
+  "warmupDuration": "PT5S",
+  "measurementDuration": "PT30S",
+  "eventRatePerSecond": 100,
+  "readRatePerSecond": 20,
+  "entityCardinality": 1000,
+  "distribution": "ZIPF",
+  "zipfSkew": 1.1,
+  "includeRawResults": false
+}
+```
+
+The benchmark response includes warm-up and measurement summaries, publish/read latency
+percentiles, optional raw measurements, and PostgreSQL SQL baseline query results when
+`spring.datasource.url` is configured for the workload generator.
 
 ## Happy Path
 
@@ -301,3 +344,9 @@ The platform will grow toward:
 - Reliability and benchmark evidence
 
 Performance and reliability claims should be added only when backed by tests or benchmark output.
+
+## Correctness Claim Boundary
+
+This project does not claim end-to-end exactly-once processing. It implements bounded
+event-id deduplication, checkpoint metadata, restart restore, and deterministic Redis
+republish behavior for the prototype scope.
