@@ -16,3 +16,7 @@ Markers expire after `rfp.dedup.retention`. Expired markers are removed in bound
 ## Guarantees
 
 The worker prevents duplicate feature updates while the marker is retained in RocksDB. After marker expiration, a replayed event can be processed again.
+
+Deduplication is bounded and partition-scoped. It is not permanent global exactly-once processing.
+
+The dedup marker is written before feature updates, but the dedup marker, aggregate state update, checkpoint metadata, Redis materialization, and Kafka offset acknowledgement are not committed as one atomic transaction. A crash between those steps can still rely on the implemented recovery and replay behavior, but the system does not claim transactional end-to-end exactly-once semantics.

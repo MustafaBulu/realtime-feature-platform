@@ -4,57 +4,38 @@ Realtime Feature Platform is a Java 21 backend project for computing low-latency
 
 The project is intentionally scoped as a streaming infrastructure portfolio project, not a payment, billing, banking, ledger, or fraud decision system.
 
-## Implemented Prototype Capabilities
+## Problem
 
-- Maven multi-module project structure
-- Java 21 build setup
-- Spring Boot application skeletons
-- Shared event and feature model modules
-- JUnit 5 test setup
-- Testcontainers dependency setup
-- Docker Compose infrastructure
-- Kafka, PostgreSQL, Redis, Prometheus, and Grafana services
-- Health endpoints
-- Structured console logging
-- GitHub Actions CI
-- Event contract validation
-- Worker counters for processed, invalid, and ignored events
-- Tumbling 10-minute entity event-count feature
-- Entity error-rate and average-latency features
-- EventId-based deduplication before feature updates
-- Event-time allowed-lateness policy for late event discard
-- In-memory feature definition registry
-- PostgreSQL-backed feature definition registry
-- Feature registry persistence, versioning, and draft/active lifecycle
-- Registry endpoints for definition save, activation, and deactivation
-- Worker feature-definition reload with last-successful snapshot fallback
-- Worker debug endpoint for active feature definitions
-- Generic `count`, `sum`, `avg`, `ratio`, and exact `distinct_count` aggregators
-- Adding standard features through registry metadata without adding Java processor classes
-- Event-time tumbling and sliding window aggregation
-- Redis latest-window aliases and window-specific reads
-- TTL-based expiration for materialized window-specific Redis keys
-- Processing-time and event-time classification for stream events
-- Allowed-lateness correction for historical window buckets
-- Arrival-order convergence tests for out-of-order events
-- Bounded partition-scoped deduplication with retention and cleanup
-- Single, subset, and batch feature serving reads
-- Serving response metadata for freshness, definition version, status, and Redis TTL
-- Worker restart restore path with deterministic Redis republish
-- Kafka rebalance assignment/revoke lifecycle handling
-- Worker recovery readiness health indicator
-- Worker ingestion lag, throughput, RocksDB size, restore duration, freshness, and serving latency metrics
-- Grafana overview, correctness, and recovery dashboards
-- PostgreSQL historical event storage for benchmark runs
-- Configurable benchmark workload with event rate, read rate, entity cardinality, uniform/Zipf distributions, warm-up, measurement, raw result export, and SQL baseline report
+Online systems often need request-time features such as per-entity request volume, error rate, or latency averages. Computing those values from historical SQL rows on every read is simple, but it becomes expensive and hard to keep predictable as read rate, window count, and entity cardinality grow.
 
-## Planned Platform Capabilities
+## Approach
 
-The current worker computes the prototype features through declarative feature definitions and the generic aggregation engine. Further work should focus on broad scale validation and production hardening.
+The platform consumes validated `PlatformEvent` records from Kafka, matches them to declarative feature definitions, updates local RocksDB aggregation state, and materializes serving-ready values into Redis. Feature definitions live in an in-memory or PostgreSQL-backed registry, so the implemented aggregation types can be added through metadata instead of new domain-specific Java processors.
 
-- Multi-node benchmark campaigns with published result artifacts
-- Operational runbooks and alert thresholds
-- Approximate high-cardinality distinct-count support
+The design is intentionally bounded: state is local to a worker, deduplication is retention-based, and Redis is a serving cache that can be republished from RocksDB. This repository documents those boundaries explicitly instead of claiming production-grade exactly-once or distributed state migration guarantees.
+
+## Evidence
+
+- Golden tests cover the prototype feature behavior for `request_count_total`, `entity_event_count_10m`, `entity_error_rate_10m`, and `entity_avg_latency_ms_5m`.
+- Unit tests cover the feature DSL, registry lifecycle, generic aggregators, window boundaries, sliding-window behavior, late-event correction, duplicate handling, recovery, and rebalance listener behavior.
+- Docker Compose runs Kafka, PostgreSQL, Redis, Prometheus, Grafana, the Feature API, the stream worker, and the workload generator locally.
+- Prometheus and Grafana expose worker throughput, ingestion lag, RocksDB state size, restore duration, API freshness, serving latency, and Redis read status.
+- The benchmark runner can produce local workload reports with event/read rates, entity cardinality, uniform or Zipf distributions, warm-up and measurement phases, raw result export, and PostgreSQL SQL report queries.
+
+## Supported / Not Supported Guarantee Matrix
+
+| Area | Supported | Not Supported |
+| --- | --- | --- |
+| Feature definition | Declarative metadata for the implemented `count`, `sum`, `avg`, `ratio`, and exact `distinct_count` aggregators and filter DSL. | Arbitrary UDFs, joins, schema-registry evolution, or a general-purpose feature store DSL. |
+| Windowing | Event-time aligned tumbling windows and sliding windows based on definition `windowSize` and `slide`. | A watermark-based full event-time engine or read-time trailing rolling windows. |
+| Latest window reads | Reads without `windowStart` return the latest materialized event-time window observed by the worker for that feature/entity. Historical corrections do not move this alias back to older windows. | "Last N minutes from now" semantics or automatic recomputation of the latest alias from older corrected windows. |
+| Allowed lateness | Events are accepted when `eventTime >= processingTime - rfp.event-time.allowed-lateness`; accepted late events correct historical window-specific keys. | Watermark-driven lateness. Long downtime or large backlog can cause old-but-valid events to be rejected because the cutoff is wall-clock based. |
+| Deduplication | Event-id deduplication scoped by Kafka topic-partition namespace while the RocksDB marker is retained. | Permanent global deduplication. Replays after marker expiry can be processed again. |
+| Atomicity | The worker orders validation, lateness check, dedup marker write, aggregation, Redis materialization, checkpoint, and Kafka ack in the implemented processing path. | A single atomic transaction across dedup state, aggregate state, checkpoint metadata, Redis writes, and Kafka offsets. |
+| Exactly-once | Bounded duplicate suppression, checkpoint metadata, restart restore, deterministic Redis republish, and tests for the prototype recovery path. | End-to-end exactly-once processing. |
+| State ownership | RocksDB is local worker state, intended to be used with Kafka partition ownership. | Multi-worker state migration, changelog topics, or moving RocksDB state between workers automatically. |
+| Serving freshness | `metadata.freshnessMillis` is data age from the materialized value's worker update timestamp to the API read time. | Update-to-availability latency from Kafka broker ack to first visible API read. That requires a separate probe. |
+| Benchmarks | Local configurable workload generation, request-time PostgreSQL baseline reads, and SQL report queries for methodology development. | Published production benchmark claims. Those require real runs with environment manifests and error-rate data. |
 
 ## Modules
 
@@ -63,8 +44,8 @@ The current worker computes the prototype features through declarative feature d
 | `event-model` | Domain-independent event records |
 | `feature-model` | Feature definition and aggregation model |
 | `feature-registry` | PostgreSQL feature registry repository and migration |
-| `feature-api` | Online feature serving API skeleton |
-| `stream-worker` | Stream processing worker skeleton |
+| `feature-api` | Online feature serving API |
+| `stream-worker` | Kafka stream processing worker |
 | `workload-generator` | Synthetic event generator and benchmark runner |
 
 ## Documentation
@@ -157,14 +138,16 @@ The endpoint exposes the active definitions loaded by the worker. When `rfp.feat
 
 Windowed features are materialized twice:
 
-- The feature key without `windowStart` stores the latest open window value.
+- The feature key without `windowStart` stores the latest materialized event-time window observed by the worker.
 - The window-specific key stores the value for the requested `windowStart` and gets a Redis TTL.
+- The latest alias is not a trailing rolling "last N minutes from now" query.
 
 Allowed-lateness behavior:
 
-- Events older than the configured allowed-lateness cutoff are rejected.
+- The allowed-lateness cutoff is based on worker wall-clock processing time: `eventTime < processingTime - rfp.event-time.allowed-lateness` is rejected.
 - Late events inside the allowed-lateness window update their historical window-specific bucket.
 - Historical corrections do not move the latest-window alias back to an older window.
+- Long downtime or a large Kafka backlog can make older events miss the wall-clock cutoff even when they are valid in the source system.
 
 Deduplication behavior:
 
@@ -172,6 +155,7 @@ Deduplication behavior:
 - Dedup marker keys include the Kafka topic-partition namespace.
 - Markers expire after `rfp.dedup.retention`.
 - Expired markers are cleaned in bounded batches controlled by `rfp.dedup.cleanup-interval` and `rfp.dedup.cleanup-batch-size`.
+- The dedup marker, aggregate update, checkpoint metadata, Redis write, and Kafka offset acknowledgement are not one atomic transaction.
 
 Feature registry endpoints:
 
@@ -193,6 +177,21 @@ POST http://localhost:8080/features/batch
 Serving responses include `metadata.status`, `metadata.updatedAt`, `metadata.freshnessMillis`,
 `metadata.definitionVersion`, and `metadata.ttlSeconds`. Status values distinguish `PRESENT`,
 `MISSING`, `STALE`, and `UNAVAILABLE`; a materialized zero value remains `PRESENT`.
+`freshnessMillis` is the age of the materialized data at read time, computed from the worker update timestamp.
+It is not a Kafka publish-to-API-visibility latency measurement.
+
+Request-time PostgreSQL baseline endpoints:
+
+```text
+GET  http://localhost:8080/baseline/features/{entityType}/{entityId}/{featureName}
+GET  http://localhost:8080/baseline/features/{entityType}/{entityId}?featureNames=request_count_total&featureNames=entity_event_count_10m
+POST http://localhost:8080/baseline/features/batch
+```
+
+The baseline endpoints return the same response shape as realtime feature reads, but compute the value on each
+request from `historical_events` through `JdbcTemplate` and the pooled Feature API PostgreSQL datasource.
+Optional `benchmarkRunId` and `benchmarkPhase` query parameters restrict reads to a benchmark run; when
+`benchmarkRunId` is provided without `benchmarkPhase`, the baseline defaults to the `measurement` phase.
 
 Benchmark endpoint:
 
@@ -218,6 +217,8 @@ Example benchmark request:
 The benchmark response includes warm-up and measurement summaries, publish/read latency
 percentiles, optional raw measurements, and PostgreSQL SQL baseline query results when
 `spring.datasource.url` is configured for the workload generator.
+The workload-generator SQL baseline values are post-run report queries. Request-time baseline serving is exposed by
+Feature API under `/baseline/features/**`.
 
 ## Happy Path
 
@@ -332,16 +333,11 @@ Sliding windows use the feature definition `slide` as the bucket granularity. Ea
 
 ## Roadmap
 
-The platform will grow toward:
+Next work is intentionally focused on benchmark evidence, not on widening the distributed-systems scope:
 
-- Kafka-backed event ingestion
-- Entity-key partitioning
-- Event-time windowing
-- RocksDB local state
-- Redis feature materialization
-- Worker restart and Kafka rebalance recovery
-- PostgreSQL on-demand aggregation baseline
-- Reliability and benchmark evidence
+- Add k6 read-load scripts for realtime and baseline APIs.
+- Add update-to-availability probes that measure Kafka broker ack to first visible Feature API read.
+- Publish benchmark results only from real runs with environment manifests and error-rate data.
 
 Performance and reliability claims should be added only when backed by tests or benchmark output.
 
@@ -349,4 +345,5 @@ Performance and reliability claims should be added only when backed by tests or 
 
 This project does not claim end-to-end exactly-once processing. It implements bounded
 event-id deduplication, checkpoint metadata, restart restore, and deterministic Redis
-republish behavior for the prototype scope.
+republish behavior for the prototype scope. Worker state is local RocksDB state; multi-worker
+state migration and changelog-backed state movement are not implemented.

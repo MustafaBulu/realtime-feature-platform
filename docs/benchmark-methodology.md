@@ -18,6 +18,7 @@ Default behavior:
 - uniform entity distribution
 - PostgreSQL history write enabled when `spring.datasource.url` is configured
 - SQL baseline enabled when PostgreSQL is configured
+- request-time PostgreSQL baseline reads available from Feature API when PostgreSQL mode is enabled
 
 ## Request Fields
 
@@ -47,7 +48,22 @@ The response contains:
 - SQL baseline query timings and sample rows
 - optional raw per-operation measurements
 
-## SQL Baseline
+## Request-Time Baseline
+
+Feature API exposes request-time PostgreSQL baseline endpoints:
+
+```text
+GET  http://localhost:8080/baseline/features/{entityType}/{entityId}/{featureName}
+GET  http://localhost:8080/baseline/features/{entityType}/{entityId}?featureNames=request_count_total&featureNames=entity_event_count_10m
+POST http://localhost:8080/baseline/features/batch
+```
+
+The response shape matches realtime Feature API reads so benchmark clients can compare realtime Redis reads and
+request-time SQL reads without response normalization. The optional `benchmarkRunId` and `benchmarkPhase` query
+parameters restrict reads to one benchmark run; `benchmarkRunId` defaults the phase to `measurement` when no phase is
+provided.
+
+## Post-Run SQL Report
 
 The historical event table stores the same generated events sent to Kafka. Baseline queries compute:
 
@@ -57,3 +73,6 @@ The historical event table stores the same generated events sent to Kafka. Basel
 - 5-minute weighted average latency per entity
 
 Benchmark comparisons should use the measurement phase only; warm-up exists to reduce cold-start noise.
+
+The workload-generator SQL baseline report is a post-run sample report. It is useful for inspecting aggregate query
+timings and sample rows, but the fair request-time serving baseline is the Feature API `/baseline/features/**` path.

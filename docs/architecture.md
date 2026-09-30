@@ -10,6 +10,7 @@ Realtime Feature Platform computes entity-scoped feature values from Kafka event
 4. The generic aggregation engine updates RocksDB-backed local state.
 5. `FeatureRedisMaterializer` writes latest aliases and window-specific keys to Redis.
 6. `feature-api` serves single, subset, and batch reads from Redis with freshness and definition metadata.
+7. `feature-api` can also serve request-time PostgreSQL baseline reads from `historical_events` under `/baseline/features/**` for benchmark comparison.
 
 ## Registry
 
@@ -23,6 +24,12 @@ Workers poll active definitions and keep the last successful snapshot if the reg
 - RocksDB is worker-local aggregation, dedup, and checkpoint state.
 - Redis is the online serving store.
 - PostgreSQL stores feature definitions and benchmark historical events.
+
+The request-time baseline path uses the Feature API PostgreSQL datasource and `JdbcTemplate`, so it goes through the same pooled datasource used by the registry when PostgreSQL mode is enabled. It does not use `DriverManager` on the read hot path.
+
+RocksDB state is local to the worker process and is tied to Kafka partition ownership. The current implementation does not provide a changelog topic, remote state store, or automatic state migration between workers. Rebalance handling flushes local state and republishes assigned partition state from the local RocksDB view; it is not a distributed state-transfer protocol.
+
+The dedup marker, aggregation update, checkpoint metadata, Redis materialization, and Kafka offset acknowledgement are ordered in the worker processing path, but they are not one atomic transaction across RocksDB, Redis, and Kafka.
 
 ## Observability
 

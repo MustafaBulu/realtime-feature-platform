@@ -4,6 +4,7 @@ import com.mustafabulu.realtimefeatureplatform.featuremodel.BuiltInFeatureDefini
 import com.mustafabulu.realtimefeatureplatform.featuremodel.MutableFeatureDefinitionRepository;
 import com.mustafabulu.realtimefeatureplatform.featuremodel.MutableInMemoryFeatureDefinitionRepository;
 import com.mustafabulu.realtimefeatureplatform.featureregistry.JdbcFeatureDefinitionRepository;
+import com.zaxxer.hikari.HikariDataSource;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,7 +15,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Configuration
@@ -27,8 +27,12 @@ class FeatureRegistryConfig {
             @Value("${spring.datasource.username}") String username,
             @Value("${spring.datasource.password}") String password
     ) {
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(url, username, password);
+        HikariDataSource dataSource = new HikariDataSource();
+        dataSource.setJdbcUrl(url);
+        dataSource.setUsername(username);
+        dataSource.setPassword(password);
         dataSource.setDriverClassName("org.postgresql.Driver");
+        dataSource.setPoolName("feature-api-postgres");
         return dataSource;
     }
 
