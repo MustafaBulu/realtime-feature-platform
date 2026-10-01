@@ -1,0 +1,37 @@
+{
+  "resultDirectory": "benchmarks/results/20261001-130000-255d4d6/",
+  "commitSha": "255d4d6",
+  "cpu": "record host CPU model and logical processor count",
+  "memory": "record host RAM",
+  "containerLimits": {
+    "featureApi": "record docker CPU/memory limits",
+    "streamWorker": "record docker CPU/memory limits",
+    "workloadGenerator": "record docker CPU/memory limits",
+    "postgres": "record docker CPU/memory limits",
+    "redis": "record docker CPU/memory limits",
+    "kafka": "record docker CPU/memory limits"
+  },
+  "measurementSource": "docker stats or Prometheus",
+  "dataset": {
+    "entityCardinality": 1000,
+    "distribution": "UNIFORM",
+    "benchmarkRunId": "record run id"
+  },
+  "workload": {
+    "warmupDuration": "PT5S",
+    "measurementDuration": "PT30S",
+    "eventRatePerSecond": 100,
+    "readRatePerSecond": 20
+  },
+  "freshnessProbe": {
+    "pollInterval": "PT0.1S",
+    "timeout": "PT10S",
+    "pollIntervalIsMeasurementErrorBound": true
+  },
+  "results": {
+    "realtimeRead": "store k6 output or benchmark response",
+    "baselineRead": "store k6 output or benchmark response",
+    "correctness": "store sampled baseline vs realtime mismatch report",
+    "updateToAvailability": "store p50/p95/p99 T4 minus T0"
+  }
+}

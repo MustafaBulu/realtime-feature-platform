@@ -11,6 +11,7 @@ Realtime Feature Platform computes entity-scoped feature values from Kafka event
 5. `FeatureRedisMaterializer` writes latest aliases and window-specific keys to Redis.
 6. `feature-api` serves single, subset, and batch reads from Redis with freshness and definition metadata.
 7. `feature-api` can also serve request-time PostgreSQL baseline reads from `historical_events` under `/baseline/features/**` for benchmark comparison.
+8. `workload-generator` acts as a benchmark publisher/probe helper: it publishes events, drives read traffic, samples correctness, and probes update-to-availability latency.
 
 ## Registry
 

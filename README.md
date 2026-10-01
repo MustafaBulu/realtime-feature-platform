@@ -20,7 +20,7 @@ The design is intentionally bounded: state is local to a worker, deduplication i
 - Unit tests cover the feature DSL, registry lifecycle, generic aggregators, window boundaries, sliding-window behavior, late-event correction, duplicate handling, recovery, and rebalance listener behavior.
 - Docker Compose runs Kafka, PostgreSQL, Redis, Prometheus, Grafana, the Feature API, the stream worker, and the workload generator locally.
 - Prometheus and Grafana expose worker throughput, ingestion lag, RocksDB state size, restore duration, API freshness, serving latency, and Redis read status.
-- The benchmark runner can produce local workload reports with event/read rates, entity cardinality, uniform or Zipf distributions, warm-up and measurement phases, raw result export, and PostgreSQL SQL report queries.
+- The benchmark publisher/probe helper can produce local workload reports with event/read rates, entity cardinality, uniform or Zipf distributions, warm-up and measurement phases, bounded raw samples, correctness sampling, update-to-availability probes, and PostgreSQL SQL report queries.
 
 ## Supported / Not Supported Guarantee Matrix
 
@@ -34,7 +34,7 @@ The design is intentionally bounded: state is local to a worker, deduplication i
 | Atomicity | The worker orders validation, lateness check, dedup marker write, aggregation, Redis materialization, checkpoint, and Kafka ack in the implemented processing path. | A single atomic transaction across dedup state, aggregate state, checkpoint metadata, Redis writes, and Kafka offsets. |
 | Exactly-once | Bounded duplicate suppression, checkpoint metadata, restart restore, deterministic Redis republish, and tests for the prototype recovery path. | End-to-end exactly-once processing. |
 | State ownership | RocksDB is local worker state, intended to be used with Kafka partition ownership. | Multi-worker state migration, changelog topics, or moving RocksDB state between workers automatically. |
-| Serving freshness | `metadata.freshnessMillis` is data age from the materialized value's worker update timestamp to the API read time. | Update-to-availability latency from Kafka broker ack to first visible API read. That requires a separate probe. |
+| Serving freshness | `metadata.freshnessMillis` is data age from the materialized value's worker update timestamp to the API read time. Benchmark probes separately measure Kafka broker ack to first visible API read. | Treating `freshnessMillis` itself as update-to-availability latency. |
 | Benchmarks | Local configurable workload generation, request-time PostgreSQL baseline reads, and SQL report queries for methodology development. | Published production benchmark claims. Those require real runs with environment manifests and error-rate data. |
 
 ## Modules
@@ -46,7 +46,7 @@ The design is intentionally bounded: state is local to a worker, deduplication i
 | `feature-registry` | PostgreSQL feature registry repository and migration |
 | `feature-api` | Online feature serving API |
 | `stream-worker` | Kafka stream processing worker |
-| `workload-generator` | Synthetic event generator and benchmark runner |
+| `workload-generator` | Synthetic event publisher, benchmark runner, and freshness/correctness probe helper |
 
 ## Documentation
 
@@ -210,15 +210,26 @@ Example benchmark request:
   "entityCardinality": 1000,
   "distribution": "ZIPF",
   "zipfSkew": 1.1,
+  "correctnessSampleSize": 20,
+  "freshnessProbeCount": 5,
+  "freshnessProbePollInterval": "PT0.1S",
+  "freshnessProbeTimeout": "PT10S",
+  "rawResultLimit": 1000,
   "includeRawResults": false
 }
 ```
 
 The benchmark response includes warm-up and measurement summaries, publish/read latency
-percentiles, optional raw measurements, and PostgreSQL SQL baseline query results when
-`spring.datasource.url` is configured for the workload generator.
+percentiles, target and completed throughput, SLO flags, HTTP error and timeout counts,
+feature-status counts, bounded optional raw measurements, sampled baseline-vs-realtime
+correctness results, update-to-availability probe percentiles, an environment manifest,
+and PostgreSQL SQL baseline query results when `spring.datasource.url` is configured for
+the workload generator.
 The workload-generator SQL baseline values are post-run report queries. Request-time baseline serving is exposed by
 Feature API under `/baseline/features/**`.
+
+Published benchmark tables are intentionally absent until a real run is saved under
+`benchmarks/results/<date>-<commit>/` with its environment manifest.
 
 ## Happy Path
 
@@ -333,11 +344,11 @@ Sliding windows use the feature definition `slide` as the bucket granularity. Ea
 
 ## Roadmap
 
-Next work is intentionally focused on benchmark evidence, not on widening the distributed-systems scope:
+Next work is intentionally focused on final presentation, not on widening the distributed-systems scope:
 
-- Add k6 read-load scripts for realtime and baseline APIs.
-- Add update-to-availability probes that measure Kafka broker ack to first visible Feature API read.
-- Publish benchmark results only from real runs with environment manifests and error-rate data.
+- Add a short demo script.
+- Move long endpoint walkthroughs lower or into docs.
+- Add a top-level architecture flow and benchmark summary only after a real result artifact exists.
 
 Performance and reliability claims should be added only when backed by tests or benchmark output.
 

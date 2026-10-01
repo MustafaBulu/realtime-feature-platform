@@ -17,6 +17,7 @@ class WorkloadKafkaConfig {
     ProducerFactory<String, String> producerFactory(@Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) {
         return new DefaultKafkaProducerFactory<>(Map.of(
                 ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
+                ProducerConfig.ACKS_CONFIG, "all",
                 ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
                 ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class
         ));

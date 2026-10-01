@@ -34,7 +34,13 @@ class BenchmarkController {
             List<String> featureNames,
             Boolean writeHistory,
             Boolean runSqlBaseline,
-            Boolean includeRawResults
+            Boolean includeRawResults,
+            Integer rawResultLimit,
+            Long readSloMillis,
+            Integer correctnessSampleSize,
+            Integer freshnessProbeCount,
+            Duration freshnessProbePollInterval,
+            Duration freshnessProbeTimeout
     ) {
 
         static BenchmarkRequest defaults() {
@@ -54,7 +60,13 @@ class BenchmarkController {
                     ),
                     true,
                     true,
-                    false
+                    false,
+                    1000,
+                    500L,
+                    20,
+                    5,
+                    Duration.ofMillis(100),
+                    Duration.ofSeconds(10)
             );
         }
 
@@ -71,7 +83,13 @@ class BenchmarkController {
                     featureNames == null || featureNames.isEmpty() ? defaults.featureNames : List.copyOf(featureNames),
                     writeHistory == null ? defaults.writeHistory : writeHistory,
                     runSqlBaseline == null ? defaults.runSqlBaseline : runSqlBaseline,
-                    includeRawResults == null ? defaults.includeRawResults : includeRawResults
+                    includeRawResults == null ? defaults.includeRawResults : includeRawResults,
+                    nonNegativeInt(rawResultLimit, defaults.rawResultLimit),
+                    positiveLong(readSloMillis, defaults.readSloMillis),
+                    nonNegativeInt(correctnessSampleSize, defaults.correctnessSampleSize),
+                    nonNegativeInt(freshnessProbeCount, defaults.freshnessProbeCount),
+                    positiveDuration(freshnessProbePollInterval, defaults.freshnessProbePollInterval),
+                    positiveDuration(freshnessProbeTimeout, defaults.freshnessProbeTimeout)
             );
         }
 
@@ -85,6 +103,10 @@ class BenchmarkController {
 
         private static int nonNegativeInt(Integer value, int fallback) {
             return value == null || value < 0 ? fallback : value;
+        }
+
+        private static long positiveLong(Long value, long fallback) {
+            return value == null || value <= 0 ? fallback : value;
         }
     }
 

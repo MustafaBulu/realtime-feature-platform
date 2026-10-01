@@ -12,5 +12,6 @@
 - Exact distinct count uses exact state and is not memory-efficient for very high cardinality.
 - The benchmark endpoint is single-process and local-environment oriented.
 - The workload-generator PostgreSQL SQL report is post-run only; request-time baseline serving is implemented separately under Feature API `/baseline/features/**`.
+- No README benchmark result table is published until a real run is saved with `benchmarks/results/<date>-<commit>/` artifacts and an environment manifest.
 - Feature definitions are declarative but limited to the implemented aggregator and filter DSL.
 - Multi-worker behavior is covered at listener and lifecycle level; broad distributed load validation is still limited.

@@ -1,5 +1,6 @@
 package com.mustafabulu.realtimefeatureplatform.workloadgenerator;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
@@ -8,8 +9,11 @@ record BenchmarkResponse(
         Instant startedAt,
         Instant finishedAt,
         BenchmarkController.BenchmarkRequest request,
+        EnvironmentManifest environment,
         List<PhaseSummary> phases,
         SqlBaselineReport sqlBaseline,
+        CorrectnessReport correctness,
+        FreshnessProbeReport freshnessProbe,
         List<RawMeasurement> rawResults
 ) {
 
@@ -22,7 +26,11 @@ record BenchmarkResponse(
             int completedReads,
             double achievedReadRatePerSecond,
             LatencySummary eventPublishLatency,
-            LatencySummary featureReadLatency
+            LatencySummary featureReadLatency,
+            ThroughputSummary eventThroughput,
+            ThroughputSummary readThroughput,
+            OperationSummary eventPublishSummary,
+            OperationSummary featureReadSummary
     ) {
     }
 
@@ -49,7 +57,82 @@ record BenchmarkResponse(
             String entityId,
             String featureName,
             int statusCode,
+            String featureStatus,
+            boolean timeout,
             boolean success
+    ) {
+    }
+
+    record ThroughputSummary(
+            double targetPerSecond,
+            double completedPerSecond,
+            int targetOperations,
+            int completedOperations,
+            boolean sustainedUnderSlo
+    ) {
+    }
+
+    record OperationSummary(
+            int total,
+            int successes,
+            int failures,
+            double errorRate,
+            int httpNon2xx,
+            int timeouts,
+            List<FeatureStatusCount> featureStatuses
+    ) {
+    }
+
+    record FeatureStatusCount(String status, int count) {
+    }
+
+    record CorrectnessReport(
+            boolean enabled,
+            int samples,
+            int matches,
+            int mismatches,
+            int unavailable,
+            List<CorrectnessMismatch> examples,
+            String message
+    ) {
+    }
+
+    record CorrectnessMismatch(
+            String entityId,
+            String featureName,
+            Number realtimeValue,
+            Number baselineValue,
+            String realtimeStatus,
+            String baselineStatus
+    ) {
+    }
+
+    record FreshnessProbeReport(
+            boolean enabled,
+            Duration pollInterval,
+            Duration timeout,
+            LatencySummary updateToAvailabilityLatency,
+            int attempts,
+            int successes,
+            int timeouts,
+            String message
+    ) {
+    }
+
+    record EnvironmentManifest(
+            String resultDirectory,
+            String commitSha,
+            String cpu,
+            long maxMemoryBytes,
+            String measurementSource,
+            String containerLimits,
+            int datasetEntityCount,
+            Duration warmupDuration,
+            Duration measurementDuration,
+            int eventRatePerSecond,
+            int readRatePerSecond,
+            Duration freshnessProbePollInterval,
+            Duration freshnessProbeTimeout
     ) {
     }
 
