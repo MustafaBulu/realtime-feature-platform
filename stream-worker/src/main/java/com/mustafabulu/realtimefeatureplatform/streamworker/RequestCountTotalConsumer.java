@@ -85,7 +85,7 @@ class RequestCountTotalConsumer {
                 LOGGER.warn("Discarded late platform event: eventId={}", event.eventId());
                 return true;
             }
-            if (!processedEventStore.markIfFirst(event, partitionNamespace)) {
+            if (processedEventStore.hasProcessed(event, partitionNamespace)) {
                 metrics.recordDuplicate();
                 LOGGER.warn("Discarded duplicate platform event: eventId={}", event.eventId());
                 return true;
@@ -106,6 +106,7 @@ class RequestCountTotalConsumer {
             } else {
                 metrics.recordIgnored();
             }
+            processedEventStore.markProcessed(event, partitionNamespace);
             return true;
         } catch (IllegalArgumentException | EventValidationException ex) {
             metrics.recordInvalid();

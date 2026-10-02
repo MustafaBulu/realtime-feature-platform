@@ -55,10 +55,16 @@ class ProcessedEventStore {
         this.nextCleanupAt = Instant.EPOCH;
     }
 
-    boolean markIfFirst(PlatformEvent event, String partitionNamespace) {
+    boolean hasProcessed(PlatformEvent event, String partitionNamespace) {
         Instant now = clock.instant();
         cleanupIfDue(now);
-        return stateStore.markIfAbsent(key(partitionNamespace, event.eventId()), now.plus(retention), now);
+        return stateStore.containsUnexpiredMarker(key(partitionNamespace, event.eventId()), now);
+    }
+
+    void markProcessed(PlatformEvent event, String partitionNamespace) {
+        Instant now = clock.instant();
+        cleanupIfDue(now);
+        stateStore.put(key(partitionNamespace, event.eventId()), Long.toString(now.plus(retention).toEpochMilli()));
     }
 
     private void cleanupIfDue(Instant now) {

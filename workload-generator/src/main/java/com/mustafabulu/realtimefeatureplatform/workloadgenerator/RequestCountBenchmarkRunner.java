@@ -275,9 +275,19 @@ class RequestCountBenchmarkRunner {
         for (int sample = 0; sample < requestedSamples; sample++) {
             String entityId = selector.nextEntityId();
             String featureName = request.featureNames().get(sample % request.featureNames().size());
-            ReadResult realtime = readFeature(absoluteRealtimeFeatureUri(entityId, featureName));
             ReadResult baseline = readFeature(baselineFeatureUri(runId, entityId, featureName));
-            if (!realtime.success() || !baseline.success()) {
+            if (!baseline.success()) {
+                unavailable++;
+                continue;
+            }
+            ReadResult realtime = waitForRealtimeMatch(
+                    entityId,
+                    featureName,
+                    baseline.value(),
+                    request.freshnessProbePollInterval(),
+                    request.freshnessProbeTimeout()
+            );
+            if (!realtime.success()) {
                 unavailable++;
                 continue;
             }
@@ -300,6 +310,22 @@ class RequestCountBenchmarkRunner {
 
         return new BenchmarkResponse.CorrectnessReport(true, requestedSamples, matches, mismatches, unavailable,
                 List.copyOf(examples), null);
+    }
+
+    private ReadResult waitForRealtimeMatch(
+            String entityId,
+            String featureName,
+            Optional<Number> expectedValue,
+            Duration pollInterval,
+            Duration timeout
+    ) {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        ReadResult last = readFeature(absoluteRealtimeFeatureUri(entityId, featureName));
+        while (!valuesMatch(last.value(), expectedValue) && System.nanoTime() < deadline) {
+            sleep(pollInterval);
+            last = readFeature(absoluteRealtimeFeatureUri(entityId, featureName));
+        }
+        return last;
     }
 
     private BenchmarkResponse.FreshnessProbeReport runFreshnessProbe(
@@ -384,9 +410,7 @@ class RequestCountBenchmarkRunner {
             if (read.value().map(Number::doubleValue).orElse(baselineValue) > baselineValue) {
                 return new ProbeResult(true, (System.nanoTime() - startedNanos) / 1_000_000);
             }
-            try {
-                Thread.sleep(pollInterval);
-            } catch (InterruptedException ex) {
+            if (!sleep(pollInterval)) {
                 Thread.currentThread().interrupt();
                 return new ProbeResult(false, (System.nanoTime() - startedNanos) / 1_000_000);
             }
@@ -565,9 +589,7 @@ class RequestCountBenchmarkRunner {
             nextRun += intervalNanos;
             long sleepNanos = nextRun - System.nanoTime();
             if (sleepNanos > 0) {
-                try {
-                    Thread.sleep(Duration.ofNanos(sleepNanos));
-                } catch (InterruptedException ex) {
+                if (!sleep(Duration.ofNanos(sleepNanos))) {
                     Thread.currentThread().interrupt();
                     return;
                 }
@@ -577,6 +599,15 @@ class RequestCountBenchmarkRunner {
 
     private static int targetOperations(int ratePerSecond, Duration duration) {
         return Math.toIntExact(Math.max(0L, ratePerSecond * duration.toSeconds()));
+    }
+
+    private static boolean sleep(Duration duration) {
+        try {
+            Thread.sleep(duration);
+            return true;
+        } catch (InterruptedException ex) {
+            return false;
+        }
     }
 
     private static boolean isEnabled(Boolean value) {

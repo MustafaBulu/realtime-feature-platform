@@ -33,31 +33,22 @@ public final class JdbcFeatureDefinitionRepository implements MutableFeatureDefi
 
     @Override
     public FeatureDefinition save(FeatureDefinition definition) {
-        jdbcTemplate.update("""
-                insert into feature_definitions
-                (name, version, event_type, entity_type, aggregation_type, value_field, weight_field,
-                 filter_field, filter_operator, filter_value, numerator_filter_field, numerator_filter_operator,
-                 numerator_filter_value, window_type, window_size, slide, state)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                on conflict (name, version) do update set
-                  event_type = excluded.event_type,
-                  entity_type = excluded.entity_type,
-                  aggregation_type = excluded.aggregation_type,
-                  value_field = excluded.value_field,
-                  weight_field = excluded.weight_field,
-                  filter_field = excluded.filter_field,
-                  filter_operator = excluded.filter_operator,
-                  filter_value = excluded.filter_value,
-                  numerator_filter_field = excluded.numerator_filter_field,
-                  numerator_filter_operator = excluded.numerator_filter_operator,
-                  numerator_filter_value = excluded.numerator_filter_value,
-                  window_type = excluded.window_type,
-                  window_size = excluded.window_size,
-                  slide = excluded.slide,
-                  state = excluded.state,
-                  updated_at = now()
-                """, params(definition));
-        return definition;
+        return transactionTemplate.execute(status -> {
+            FeatureDefinition saved = definition.state() == FeatureDefinitionState.ACTIVE
+                    ? withState(definition, FeatureDefinitionState.DRAFT)
+                    : definition;
+            upsert(saved);
+            if (definition.state() == FeatureDefinitionState.ACTIVE) {
+                jdbcTemplate.update("""
+                        update feature_definitions set state = 'INACTIVE', updated_at = now() where name = ?
+                        """, definition.name());
+                jdbcTemplate.update("""
+                        update feature_definitions set state = 'ACTIVE', updated_at = now() where name = ? and version = ?
+                        """, definition.name(), definition.version());
+                return require(definition.name(), definition.version());
+            }
+            return saved;
+        });
     }
 
     @Override
@@ -87,6 +78,51 @@ public final class JdbcFeatureDefinitionRepository implements MutableFeatureDefi
                 """, JdbcFeatureDefinitionRepository::map, name, version).stream()
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("feature definition not found: " + name + ":" + version));
+    }
+
+    private void upsert(FeatureDefinition definition) {
+        jdbcTemplate.update("""
+                insert into feature_definitions
+                (name, version, event_type, entity_type, aggregation_type, value_field, weight_field,
+                 filter_field, filter_operator, filter_value, numerator_filter_field, numerator_filter_operator,
+                 numerator_filter_value, window_type, window_size, slide, state)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                on conflict (name, version) do update set
+                  event_type = excluded.event_type,
+                  entity_type = excluded.entity_type,
+                  aggregation_type = excluded.aggregation_type,
+                  value_field = excluded.value_field,
+                  weight_field = excluded.weight_field,
+                  filter_field = excluded.filter_field,
+                  filter_operator = excluded.filter_operator,
+                  filter_value = excluded.filter_value,
+                  numerator_filter_field = excluded.numerator_filter_field,
+                  numerator_filter_operator = excluded.numerator_filter_operator,
+                  numerator_filter_value = excluded.numerator_filter_value,
+                  window_type = excluded.window_type,
+                  window_size = excluded.window_size,
+                  slide = excluded.slide,
+                  state = excluded.state,
+                  updated_at = now()
+                """, params(definition));
+    }
+
+    private static FeatureDefinition withState(FeatureDefinition definition, FeatureDefinitionState state) {
+        return new FeatureDefinition(
+                definition.name(),
+                definition.eventType(),
+                definition.entityType(),
+                definition.aggregationType(),
+                definition.valueField(),
+                definition.weightField(),
+                definition.filter(),
+                definition.numeratorFilter(),
+                definition.windowType(),
+                definition.windowSize(),
+                definition.slide(),
+                definition.version(),
+                state
+        );
     }
 
     private static Object[] params(FeatureDefinition definition) {

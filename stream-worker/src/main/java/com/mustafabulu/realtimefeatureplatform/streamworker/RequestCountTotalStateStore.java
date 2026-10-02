@@ -42,6 +42,16 @@ class RequestCountTotalStateStore implements AutoCloseable {
         }
     }
 
+    boolean containsUnexpiredMarker(String key, Instant now) {
+        byte[] encodedKey = key.getBytes(StandardCharsets.UTF_8);
+        try {
+            byte[] existing = database.get(encodedKey);
+            return existing != null && !isExpired(existing, now);
+        } catch (RocksDBException ex) {
+            throw new IllegalStateException("Could not read RocksDB marker", ex);
+        }
+    }
+
     void cleanupExpiredMarkers(String prefix, Instant now, int maxEntries) {
         if (maxEntries <= 0) {
             return;

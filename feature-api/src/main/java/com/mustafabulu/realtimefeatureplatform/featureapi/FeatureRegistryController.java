@@ -30,7 +30,7 @@ class FeatureRegistryController {
 
     @PostMapping("/registry/definitions")
     FeatureDefinition save(@RequestBody FeatureDefinitionRequest request) {
-        return repository.save(request.toDefinition());
+        return repository.save(request.toDraftDefinition());
     }
 
     @PostMapping("/registry/definitions/{name}/versions/{version}/activate")
@@ -59,7 +59,7 @@ class FeatureRegistryController {
             FeatureDefinitionState state
     ) {
 
-        FeatureDefinition toDefinition() {
+        FeatureDefinition toDraftDefinition() {
             return new FeatureDefinition(
                     name,
                     eventType,
@@ -73,7 +73,7 @@ class FeatureRegistryController {
                     windowSize,
                     slide,
                     version,
-                    state == null ? FeatureDefinitionState.DRAFT : state
+                    FeatureDefinitionState.DRAFT
             );
         }
     }

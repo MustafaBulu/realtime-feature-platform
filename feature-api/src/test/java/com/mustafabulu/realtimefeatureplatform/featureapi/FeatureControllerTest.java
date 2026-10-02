@@ -6,6 +6,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.mustafabulu.realtimefeatureplatform.featuremodel.BuiltInFeatureDefinitions;
+import com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureDefinition;
+import com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureDefinitionRepository;
 import com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureNames;
 import com.mustafabulu.realtimefeatureplatform.featuremodel.MutableInMemoryFeatureDefinitionRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -180,6 +182,31 @@ class FeatureControllerTest {
         assertEquals(FeatureController.FeatureReadStatus.UNAVAILABLE, requireNonNull(body.metadata()).status());
     }
 
+    @Test
+    void modelsRedisUnavailableEvenWhenDefinitionRepositoryFails() {
+        StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
+        when(redisTemplate.opsForValue()).thenThrow(new IllegalStateException("redis unavailable"));
+        FeatureController controller = new FeatureController(
+                redisTemplate,
+                failingDefinitionRepository(),
+                new SimpleMeterRegistry(),
+                Clock.fixed(Instant.parse("2026-08-28T12:20:00Z"), ZoneOffset.UTC),
+                Duration.ofMinutes(5)
+        );
+
+        ResponseEntity<FeatureController.FeatureReadResponse> response = controller.getFeature(
+                "service",
+                "catalog-api",
+                FeatureNames.REQUEST_COUNT_TOTAL,
+                null
+        );
+
+        FeatureController.FeatureReadResponse body = requireNonNull(response.getBody());
+        FeatureController.FeatureMetadata metadata = requireNonNull(body.metadata());
+        assertEquals(FeatureController.FeatureReadStatus.UNAVAILABLE, metadata.status());
+        assertEquals(null, metadata.definitionVersion());
+    }
+
     @SuppressWarnings("unchecked")
     private StringRedisTemplate redisTemplateReturning(Map<String, String> values) {
         StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
@@ -206,5 +233,14 @@ class FeatureControllerTest {
                 Clock.fixed(Instant.parse("2026-08-28T12:20:00Z"), ZoneOffset.UTC),
                 Duration.ofMinutes(5)
         );
+    }
+
+    private static FeatureDefinitionRepository failingDefinitionRepository() {
+        return new FeatureDefinitionRepository() {
+            @Override
+            public List<FeatureDefinition> findAll() {
+                throw new IllegalStateException("registry unavailable");
+            }
+        };
     }
 }

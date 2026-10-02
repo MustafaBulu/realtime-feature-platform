@@ -154,7 +154,7 @@ class FeatureController {
                             FeatureReadStatus.UNAVAILABLE,
                             null,
                             null,
-                            activeDefinitionVersion(entityType, featureName),
+                            activeDefinitionVersionSafely(entityType, featureName),
                             null
                     )
             );
@@ -190,6 +190,14 @@ class FeatureController {
                 .map(FeatureDefinition::version)
                 .findFirst()
                 .orElse(null);
+    }
+
+    private Integer activeDefinitionVersionSafely(String entityType, String featureName) {
+        try {
+            return activeDefinitionVersion(entityType, featureName);
+        } catch (RuntimeException ex) {
+            return null;
+        }
     }
 
     private void recordRedisRead(FeatureReadStatus status) {

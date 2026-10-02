@@ -10,9 +10,8 @@ import java.util.Optional;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@ConditionalOnBean(JdbcTemplate.class)
+@ConditionalOnProperty(name = "spring.datasource.url")
 class BaselineFeatureController {
 
     private static final String DEFAULT_BENCHMARK_PHASE = "measurement";
@@ -169,7 +168,7 @@ class BaselineFeatureController {
                     FeatureController.FeatureReadStatus.UNAVAILABLE,
                     null,
                     null,
-                    activeDefinitionVersion(entityType, featureName)
+                    activeDefinitionVersionSafely(entityType, featureName)
             );
         }
     }
@@ -223,6 +222,14 @@ class BaselineFeatureController {
                 .map(FeatureDefinition::version)
                 .findFirst()
                 .orElse(null);
+    }
+
+    private Integer activeDefinitionVersionSafely(String entityType, String featureName) {
+        try {
+            return activeDefinitionVersion(entityType, featureName);
+        } catch (RuntimeException ex) {
+            return null;
+        }
     }
 
     private static String defaultBenchmarkPhase(String benchmarkRunId, String benchmarkPhase) {

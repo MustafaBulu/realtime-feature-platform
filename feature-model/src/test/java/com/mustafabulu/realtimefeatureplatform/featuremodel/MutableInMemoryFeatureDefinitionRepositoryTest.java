@@ -32,6 +32,19 @@ class MutableInMemoryFeatureDefinitionRepositoryTest {
         assertEquals(List.of(), repository.findActive());
     }
 
+    @Test
+    void savingActiveDefinitionInactivatesOtherVersionsForSameFeature() {
+        FeatureDefinition first = definition(1, FeatureDefinitionState.ACTIVE);
+        FeatureDefinition second = definition(2, FeatureDefinitionState.ACTIVE);
+        MutableInMemoryFeatureDefinitionRepository repository =
+                new MutableInMemoryFeatureDefinitionRepository(List.of(first));
+
+        FeatureDefinition saved = repository.save(second);
+
+        assertEquals(FeatureDefinitionState.ACTIVE, saved.state());
+        assertEquals(List.of(saved), repository.findActive());
+    }
+
     private static FeatureDefinition definition(int version, FeatureDefinitionState state) {
         return new FeatureDefinition(
                 "request_count_total",

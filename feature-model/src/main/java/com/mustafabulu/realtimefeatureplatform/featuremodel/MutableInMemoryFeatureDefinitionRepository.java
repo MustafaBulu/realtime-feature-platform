@@ -21,6 +21,15 @@ public final class MutableInMemoryFeatureDefinitionRepository implements Mutable
 
     @Override
     public FeatureDefinition save(FeatureDefinition definition) {
+        if (definition.state() == FeatureDefinitionState.ACTIVE) {
+            new ArrayList<>(definitions.values()).stream()
+                    .filter(existing -> existing.name().equals(definition.name()))
+                    .filter(existing -> existing.version() != definition.version())
+                    .forEach(existing -> definitions.put(
+                            key(existing.name(), existing.version()),
+                            withState(existing, FeatureDefinitionState.INACTIVE)
+                    ));
+        }
         definitions.put(key(definition.name(), definition.version()), definition);
         return definition;
     }

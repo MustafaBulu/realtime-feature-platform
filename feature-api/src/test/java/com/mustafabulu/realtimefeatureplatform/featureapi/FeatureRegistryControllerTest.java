@@ -39,4 +39,30 @@ class FeatureRegistryControllerTest {
         assertEquals(FeatureDefinitionState.ACTIVE, activated.state());
         assertEquals(1, controller.definitions().size());
     }
+
+    @Test
+    void saveAlwaysCreatesDraftDefinitionEvenWhenRequestAsksForActive() {
+        MutableInMemoryFeatureDefinitionRepository repository =
+                new MutableInMemoryFeatureDefinitionRepository(List.of());
+        FeatureRegistryController controller = new FeatureRegistryController(repository);
+
+        FeatureDefinition saved = controller.save(new FeatureRegistryController.FeatureDefinitionRequest(
+                "request_count_total",
+                "request.completed",
+                "service",
+                AggregationType.SUM,
+                "count",
+                null,
+                null,
+                null,
+                WindowType.NONE,
+                null,
+                null,
+                1,
+                FeatureDefinitionState.ACTIVE
+        ));
+
+        assertEquals(FeatureDefinitionState.DRAFT, saved.state());
+        assertEquals(List.of(), repository.findActive());
+    }
 }

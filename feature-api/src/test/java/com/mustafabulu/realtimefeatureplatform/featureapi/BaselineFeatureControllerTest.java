@@ -4,6 +4,8 @@ import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.mustafabulu.realtimefeatureplatform.featuremodel.BuiltInFeatureDefinitions;
+import com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureDefinition;
+import com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureDefinitionRepository;
 import com.mustafabulu.realtimefeatureplatform.featuremodel.FeatureNames;
 import com.mustafabulu.realtimefeatureplatform.featuremodel.MutableInMemoryFeatureDefinitionRepository;
 import java.time.Clock;
@@ -86,6 +88,30 @@ class BaselineFeatureControllerTest {
         assertEquals(3L, features.get(1).value());
     }
 
+    @Test
+    void modelsBaselineUnavailableEvenWhenDefinitionRepositoryFails() {
+        BaselineFeatureController controller = new BaselineFeatureController(
+                new FailingBaselineRepository(),
+                failingDefinitionRepository(),
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                Duration.ofMinutes(5)
+        );
+
+        ResponseEntity<FeatureController.FeatureReadResponse> response = controller.getFeature(
+                "service",
+                "catalog-api",
+                FeatureNames.REQUEST_COUNT_TOTAL,
+                null,
+                null,
+                null
+        );
+
+        FeatureController.FeatureReadResponse body = requireNonNull(response.getBody());
+        FeatureController.FeatureMetadata metadata = requireNonNull(body.metadata());
+        assertEquals(FeatureController.FeatureReadStatus.UNAVAILABLE, metadata.status());
+        assertEquals(null, metadata.definitionVersion());
+    }
+
     private static void assertFeatureValue(
             BaselineFeatureController controller,
             String featureName,
@@ -152,5 +178,26 @@ class BaselineFeatureControllerTest {
             lastRequest = request;
             return super.read(request);
         }
+    }
+
+    private static final class FailingBaselineRepository extends BaselineFeatureQueryRepository {
+
+        FailingBaselineRepository() {
+            super(null);
+        }
+
+        @Override
+        Optional<BaselineFeatureRow> read(BaselineFeatureRequest request) {
+            throw new IllegalStateException("postgres unavailable");
+        }
+    }
+
+    private static FeatureDefinitionRepository failingDefinitionRepository() {
+        return new FeatureDefinitionRepository() {
+            @Override
+            public List<FeatureDefinition> findAll() {
+                throw new IllegalStateException("registry unavailable");
+            }
+        };
     }
 }

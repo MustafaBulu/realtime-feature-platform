@@ -29,38 +29,43 @@ class ProcessedEventStoreTest {
     );
 
     @Test
-    void marksEventIdOnlyOnce() {
+    void tracksEventIdAfterItIsMarkedProcessed() {
         PlatformEvent event = event();
-        Instant expiresAt = Instant.parse("2026-08-29T12:20:00Z");
-        when(stateStore.markIfAbsent("processed-event:platform.events-0:event-1", expiresAt, now))
-                .thenReturn(true, false);
+        when(stateStore.containsUnexpiredMarker("processed-event:platform.events-0:event-1", now))
+                .thenReturn(false, true);
 
-        assertTrue(processedEventStore.markIfFirst(event, "platform.events-0"));
-        assertFalse(processedEventStore.markIfFirst(event, "platform.events-0"));
+        assertFalse(processedEventStore.hasProcessed(event, "platform.events-0"));
+        processedEventStore.markProcessed(event, "platform.events-0");
+        assertTrue(processedEventStore.hasProcessed(event, "platform.events-0"));
         verify(stateStore).cleanupExpiredMarkers("processed-event:", now, 1000);
+        verify(stateStore).put("processed-event:platform.events-0:event-1", "1788006000000");
     }
 
     @Test
     void namespacesEventIdsByPartition() {
         PlatformEvent event = event();
-        Instant expiresAt = Instant.parse("2026-08-29T12:20:00Z");
-        when(stateStore.markIfAbsent("processed-event:platform.events-0:event-1", expiresAt, now)).thenReturn(true);
-        when(stateStore.markIfAbsent("processed-event:platform.events-1:event-1", expiresAt, now)).thenReturn(true);
+        when(stateStore.containsUnexpiredMarker("processed-event:platform.events-0:event-1", now)).thenReturn(false);
+        when(stateStore.containsUnexpiredMarker("processed-event:platform.events-1:event-1", now)).thenReturn(false);
 
-        assertTrue(processedEventStore.markIfFirst(event, "platform.events-0"));
-        assertTrue(processedEventStore.markIfFirst(event, "platform.events-1"));
+        assertFalse(processedEventStore.hasProcessed(event, "platform.events-0"));
+        assertFalse(processedEventStore.hasProcessed(event, "platform.events-1"));
+        processedEventStore.markProcessed(event, "platform.events-0");
+        processedEventStore.markProcessed(event, "platform.events-1");
+
+        verify(stateStore).put("processed-event:platform.events-0:event-1", "1788006000000");
+        verify(stateStore).put("processed-event:platform.events-1:event-1", "1788006000000");
     }
 
     @Test
     void rejectsDuplicateBurstAfterFirstEvent() {
         PlatformEvent event = event();
-        Instant expiresAt = Instant.parse("2026-08-29T12:20:00Z");
-        when(stateStore.markIfAbsent("processed-event:platform.events-0:event-1", expiresAt, now))
-                .thenReturn(true, false);
+        when(stateStore.containsUnexpiredMarker("processed-event:platform.events-0:event-1", now))
+                .thenReturn(false, true);
 
-        assertTrue(processedEventStore.markIfFirst(event, "platform.events-0"));
+        assertFalse(processedEventStore.hasProcessed(event, "platform.events-0"));
+        processedEventStore.markProcessed(event, "platform.events-0");
         for (int duplicateIndex = 0; duplicateIndex < 100; duplicateIndex++) {
-            assertFalse(processedEventStore.markIfFirst(event, "platform.events-0"));
+            assertTrue(processedEventStore.hasProcessed(event, "platform.events-0"));
         }
     }
 
@@ -76,7 +81,8 @@ class ProcessedEventStoreTest {
                     Duration.ofMinutes(5),
                     1000
             );
-            assertTrue(firstProcessedEventStore.markIfFirst(event, "platform.events-0"));
+            assertFalse(firstProcessedEventStore.hasProcessed(event, "platform.events-0"));
+            firstProcessedEventStore.markProcessed(event, "platform.events-0");
         }
 
         try (RequestCountTotalStateStore secondStateStore =
@@ -88,7 +94,7 @@ class ProcessedEventStoreTest {
                     Duration.ofMinutes(5),
                     1000
             );
-            assertFalse(secondProcessedEventStore.markIfFirst(event, "platform.events-0"));
+            assertTrue(secondProcessedEventStore.hasProcessed(event, "platform.events-0"));
         }
     }
 

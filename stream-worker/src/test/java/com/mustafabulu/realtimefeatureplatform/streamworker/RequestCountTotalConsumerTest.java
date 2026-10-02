@@ -6,6 +6,7 @@ import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -43,7 +44,7 @@ class RequestCountTotalConsumerTest {
 
     @BeforeEach
     void setUp() {
-        when(processedEventStore.markIfFirst(any(), anyString())).thenReturn(true);
+        when(processedEventStore.hasProcessed(any(), anyString())).thenReturn(false);
     }
 
     @Test
@@ -80,7 +81,8 @@ class RequestCountTotalConsumerTest {
 
         consumer.consume(new ConsumerRecord<>("platform.events", 3, 42L, "catalog-api", payload));
 
-        verify(processedEventStore).markIfFirst(any(), eq("platform.events-3"));
+        verify(processedEventStore).hasProcessed(any(), eq("platform.events-3"));
+        verify(processedEventStore).markProcessed(any(), eq("platform.events-3"));
     }
 
     @Test
@@ -160,7 +162,7 @@ class RequestCountTotalConsumerTest {
 
     @Test
     void discardsDuplicateEventWithoutCallingProcessor() {
-        when(processedEventStore.markIfFirst(any(), anyString())).thenReturn(false);
+        when(processedEventStore.hasProcessed(any(), anyString())).thenReturn(true);
         String payload = EventJsonCodec.toJson(RequestCompletedEventFactory.create(
                 "event-1",
                 "service",
@@ -190,7 +192,11 @@ class RequestCountTotalConsumerTest {
 
         consumer.consume(payload);
 
-        verify(processedEventStore, never()).markIfFirst(
+        verify(processedEventStore, never()).hasProcessed(
+                any(),
+                anyString()
+        );
+        verify(processedEventStore, never()).markProcessed(
                 any(),
                 anyString()
         );
@@ -199,5 +205,24 @@ class RequestCountTotalConsumerTest {
                 any(EventTimeAssessment.class)
         );
         assertEquals(1.0, meterRegistry.counter("rfp.worker.events.late").count());
+    }
+
+    @Test
+    void doesNotMarkProcessedWhenProcessorFails() {
+        when(processor.supports(any())).thenReturn(true);
+        doThrow(new IllegalStateException("redis unavailable"))
+                .when(processor)
+                .process(any(), any(EventTimeAssessment.class));
+        String payload = EventJsonCodec.toJson(RequestCompletedEventFactory.create(
+                "event-1",
+                "service",
+                "catalog-api",
+                100,
+                Instant.parse("2026-08-28T12:10:14.200Z")
+        ));
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> consumer.consume(payload));
+
+        verify(processedEventStore, never()).markProcessed(any(), anyString());
     }
 }
